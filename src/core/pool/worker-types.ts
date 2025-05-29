@@ -1,10 +1,12 @@
 import type { ResizeOptions } from '@/types';
+import type { CanvasDefaultSettings } from '@/decoders/canvas/defaults.ts';
 
 export interface WorkerRequest {
   id: string | number;
   task: 'process';
   data: Uint8Array;
   resize?: ResizeOptions | undefined;
+  settings?: CanvasDefaultSettings | undefined;
 }
 
 export interface WorkerSuccessResponse {

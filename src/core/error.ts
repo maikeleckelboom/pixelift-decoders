@@ -35,6 +35,18 @@ export class PixeliftFetchAbortedError extends PixeliftError {
   }
 }
 
+export class PixeliftWorkerError extends PixeliftError {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(`Worker error: ${message}`, options);
+  }
+}
+
+export class PixeliftInputError extends PixeliftError {
+  constructor(expected: string, received: string, options?: { cause?: unknown }) {
+    super(`Invalid input: expected ${expected}, received ${received}`, options);
+  }
+}
+
 export class PixeliftDependencyError extends PixeliftError {
   constructor(dependency: string, message: string, options?: { cause?: unknown }) {
     super(`Missing dependency: ${dependency}. ${message}`, options);

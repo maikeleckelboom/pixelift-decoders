@@ -1,73 +1,110 @@
-import type {
-  WorkerErrorResponse,
-  WorkerRequest,
-  WorkerSuccessResponse
-} from '@/core/pool/worker-types';
-import { calculateDrawRectSharpLike } from '@/core/utils/canvas.ts';
+import { calculateDrawRectSharpLike } from '@/core/utils/canvas';
+import { getCanvasDefaultSettings } from '@/decoders/canvas/defaults';
 
-let canvas: OffscreenCanvas | null = null;
-let ctx: OffscreenCanvasRenderingContext2D | null = null;
+const canvasPool: OffscreenCanvas[] = [];
+const ctxPool: Record<number, OffscreenCanvasRenderingContext2D> = {};
 
-self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
-  const { id, data, task, resize } = event.data;
+function getCanvas(
+  width: number,
+  height: number
+): {
+  canvas: OffscreenCanvas;
+  ctx: OffscreenCanvasRenderingContext2D;
+} {
+  // Try to find matching canvas in pool
+  for (const canvas of canvasPool) {
+    if (canvas.width === width && canvas.height === height) {
+      const ctx = ctxPool[canvas.width];
+      return { canvas, ctx: ctx! };
+    }
+  }
 
-  if (task !== 'process') return;
+  // Create new canvas
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d', getCanvasDefaultSettings());
+  if (!ctx) throw new Error('Failed to create canvas context');
+
+  // Add to pools
+  canvasPool.push(canvas);
+  ctxPool[canvas.width] = ctx;
+
+  return { canvas, ctx };
+}
+
+self.onmessage = async (event: MessageEvent<WorkerTask>) => {
+  const { id, type, data, options } = event.data;
 
   try {
-    canvas ??= new OffscreenCanvas(1, 1);
-    ctx ??= canvas.getContext('2d');
-
-    if (!ctx) return returnError(id, 'Failed to get 2D context');
-
-    const blob = new Blob([data]);
-    console.log(`Worker processing image with size: ${data.byteLength} bytes`);
-    const imageBitmap = await createImageBitmap(blob);
-
-    const targetWidth = resize?.width ?? imageBitmap.width;
-    const targetHeight = resize?.height ?? imageBitmap.height;
-
-    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
+    if (type !== 'image-decode') {
+      throw new Error(`Unsupported task type: ${type}`);
     }
 
-    ctx.clearRect(0, 0, targetWidth, targetHeight);
+    let imageBitmap: ImageBitmap;
 
+    // Handle different input types
+    if (data.type === 'bitmap') {
+      imageBitmap = data.bitmap;
+    } else if (data.type === 'buffer') {
+      const blob = new Blob([data.buffer]);
+      imageBitmap = await createImageBitmap(blob);
+    } else if (data.type === 'url') {
+      const response = await fetch(data.url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      imageBitmap = await createImageBitmap(blob);
+    } else {
+      throw new Error('Invalid data type');
+    }
+
+    // Calculate target dimensions
+    const targetWidth = options?.resize?.width ?? imageBitmap.width;
+    const targetHeight = options?.resize?.height ?? imageBitmap.height;
+
+    // Get canvas from pool
+    const { canvas, ctx } = getCanvas(targetWidth, targetHeight);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Calculate draw parameters
     const { sx, sy, sw, sh, dx, dy, dw, dh } = calculateDrawRectSharpLike(
       imageBitmap.width,
       imageBitmap.height,
       {
         width: targetWidth,
         height: targetHeight,
-        fit: resize?.fit
+        fit: options?.resize?.fit
       }
     );
 
+    // Draw and extract pixels
     ctx.drawImage(imageBitmap, sx, sy, sw, sh, dx, dy, dw, dh);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-    const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+    // Cleanup
+    imageBitmap.close();
 
-    const response: WorkerSuccessResponse = {
+    // Send response with transferable
+    self.postMessage(
+      {
+        id,
+        type: 'success',
+        result: {
+          pixels: imageData.data,
+          width: canvas.width,
+          height: canvas.height
+        }
+      },
+      [imageData.data.buffer]
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    self.postMessage({
       id,
-      task: 'process',
-      width: targetWidth,
-      height: targetHeight,
-      result: imageData.data
-    };
-
-    self.postMessage(response, [imageData.data.buffer]);
-  } catch (err) {
-    returnError(id, err);
+      type: 'error',
+      error: {
+        message,
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : 'Error'
+      }
+    });
   }
 };
-
-function returnError(id: string | number, error: unknown) {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : 'Unknown error';
-  const response: WorkerErrorResponse = { id, error: message, task: 'error' };
-  self.postMessage(response);
-}

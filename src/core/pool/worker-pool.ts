@@ -6,6 +6,7 @@ import type {
   WorkerRequest,
   WorkerResponse
 } from '@/core/pool/worker-types.ts';
+import { getCanvasDefaultSettings } from '@/decoders/canvas/defaults.ts';
 
 const WORKER_SCRIPT_URL = new URL('./worker-script.worker', import.meta.url);
 
@@ -52,4 +53,4 @@ export async function configureWorkerPool(maxWorkers: number) {
   internalWorkerPool = createWorkerPool(maxWorkers);
 }
 
-export const withWorker = createWithResource(internalWorkerPool);
+export const withWorker = createWithResource(internalWorkerPool, getCanvasDefaultSettings);

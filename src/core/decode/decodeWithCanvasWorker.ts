@@ -1,85 +1,123 @@
 import type {
-  TypedWorker,
   WorkerRequest,
   WorkerResponse,
-  WorkerErrorResponse,
   WorkerSuccessResponse
-} from '@/core/pool/worker-types.ts';
-import type { PixelData, ResizeOptions } from '@/types';
-import { toTransferList } from '@/core/utils/canvas.ts';
+} from '@/core/pool/worker-types';
+import type { PixelData, ResizeOptions, BrowserInput } from '@/types';
+import { workerPool } from '@/core/pool/worker-pool';
+import { PixeliftWorkerError, PixeliftInputError, PixeliftDecodeError } from '@/core/error';
 
-let currentId = 0;
-function nextId(): number {
-  return ++currentId;
-}
-
-const pending = new Map<
-  number,
-  {
-    resolve: (value: Uint8ClampedArray) => void;
-    reject: (reason?: any) => void;
-  }
->();
-
-export function setupWorker(worker: TypedWorker) {
-  worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
-    const { id, task } = event.data;
-    const handlers = pending.get(Number(id));
-    if (!handlers) return;
-
-    if (task === 'process') {
-      const success = event.data as WorkerSuccessResponse;
-      handlers.resolve(success.result);
-    } else if (task === 'error') {
-      const error = event.data as WorkerErrorResponse;
-      handlers.reject(new Error(error.error));
-    } else {
-      handlers.reject(new Error('Unexpected worker response'));
-    }
-    pending.delete(Number(id));
-  };
-
-  worker.onerror = (event: ErrorEvent) => {
-    // Reject all pending promises if worker errors
-    for (const { reject } of pending.values()) {
-      reject(event.error ?? new Error('Worker error'));
-    }
-    pending.clear();
-  };
-}
+// Worker task registry
+const TASK_NAME = 'image-decode';
 
 export async function decodeWithCanvasWorker(
-  input: ImageBitmapSource | Blob,
+  input: BrowserInput,
   options?: { resize?: ResizeOptions }
 ): Promise<PixelData> {
-  const worker: TypedWorker = {
-    worker: new Worker(new URL('@/core/pool/worker-script.worker.ts', import.meta.url), {
-      type: 'module'
-    }),
-    terminate() {
-      this.worker.terminate();
-    },
-    postMessage(message: WorkerRequest, transfer?: Transferable[]) {
-      this.worker.postMessage(message, transfer);
-    },
-    onmessage: null,
-    onerror: null
-  };
+  try {
+    // Prepare payload with transferables
+    const { data, transferables } = await prepareWorkerPayload(input);
 
-  setupWorker(worker);
+    // Execute worker task
+    const result = await workerPool.executeTask<WorkerSuccessResponse>(
+      {
+        type: TASK_NAME,
+        data,
+        options: {
+          resize: options?.resize
+        }
+      },
+      transferables
+    );
 
-  const id = nextId();
-  const resize = options?.resize;
+    // Validate worker response
+    validateWorkerResponse(result);
 
-  const request: WorkerRequest = {
-    id,
-    task: 'process',
-    data: input instanceof Blob ? new Uint8Array(await input.arrayBuffer()) : input,
-    resize
-  };
+    return {
+      data: result.pixels,
+      width: result.width,
+      height: result.height
+    };
+  } catch (error) {
+    if (error instanceof PixeliftWorkerError) {
+      throw new PixeliftDecodeError('Worker decoding failed', error.message, {
+        cause: error
+      });
+    }
+    throw error;
+  }
+}
 
-  return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
-    worker.postMessage(request, toTransferList(request.data));
-  });
+async function prepareWorkerPayload(
+  input: BrowserInput
+): Promise<{ data: any; transferables: Transferable[] }> {
+  if (input instanceof Uint8Array) {
+    return {
+      data: { type: 'buffer', buffer: input },
+      transferables: [input.buffer]
+    };
+  }
+
+  if (input instanceof Blob) {
+    const buffer = await input.arrayBuffer();
+    const uint8 = new Uint8Array(buffer);
+    return {
+      data: { type: 'buffer', buffer: uint8 },
+      transferables: [buffer]
+    };
+  }
+
+  if (input instanceof ImageBitmap) {
+    return {
+      data: { type: 'bitmap', bitmap: input },
+      transferables: [input]
+    };
+  }
+
+  if (typeof input === 'string') {
+    return {
+      data: { type: 'url', url: input },
+      transferables: []
+    };
+  }
+
+  if (input instanceof HTMLImageElement && input.complete && input.naturalWidth > 0) {
+    const bitmap = await createImageBitmap(input);
+    return {
+      data: { type: 'bitmap', bitmap },
+      transferables: [bitmap]
+    };
+  }
+
+  throw new PixeliftInputError(
+    'Unsupported input type for worker',
+    input?.constructor?.name || typeof input
+  );
+}
+
+function validateWorkerResponse(response: WorkerSuccessResponse): void {
+  if (!response || typeof response !== 'object') {
+    throw new PixeliftWorkerError('Invalid worker response format');
+  }
+
+  const { width, height, pixels } = response;
+
+  if (!Number.isInteger(width) || width <= 0) {
+    throw new PixeliftWorkerError(`Invalid width in worker response: ${width}`);
+  }
+
+  if (!Number.isInteger(height) || height <= 0) {
+    throw new PixeliftWorkerError(`Invalid height in worker response: ${height}`);
+  }
+
+  if (!(pixels instanceof Uint8ClampedArray)) {
+    throw new PixeliftWorkerError('Worker returned invalid pixel data');
+  }
+
+  const expectedBytes = width * height * 4;
+  if (pixels.length !== expectedBytes) {
+    throw new PixeliftWorkerError(
+      `Pixel buffer size mismatch: expected ${expectedBytes} bytes, got ${pixels.length}`
+    );
+  }
 }
