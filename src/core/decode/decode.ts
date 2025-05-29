@@ -1,8 +1,11 @@
 import type { BrowserInput, PixelData, ResizeOptions } from '@/types';
-import { decodeWithCanvasWorker } from '@/core/decode/decodeWithCanvasWorker.ts';
+import {
+  decodeWithCanvasWorker,
+  isWorkerSupported
+} from '@/core/decode/decodeWithCanvasWorker.ts';
 import { decodeWithCanvas } from '@/core/decode/decodeWithCanvas.ts';
 
-interface DecodeOptions {
+export interface DecodeOptions {
   preferWorker?: boolean;
   resize?: ResizeOptions;
 }
@@ -11,11 +14,16 @@ export async function decode(
   input: ImageBitmapSource,
   options?: DecodeOptions
 ): Promise<PixelData> {
-  const preferWorker = options?.preferWorker ?? true;
-
-  if (preferWorker) {
-    return decodeWithCanvasWorker(input, options);
+  if (options?.preferWorker && isWorkerSupported()) {
+    console.log('👷️ Using worker decode path');
+    try {
+      return await decodeWithCanvasWorker(input, options);
+    } catch (e) {
+      console.warn('Worker decode failed, falling back to canvas:', e);
+    }
   }
 
-  return decodeWithCanvas(input, options);
+  console.log('🖼️ Using canvas decode path');
+
+  return await decodeWithCanvas(input, options);
 }

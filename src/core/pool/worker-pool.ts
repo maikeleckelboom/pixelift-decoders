@@ -1,14 +1,18 @@
-import type { WorkerResponse, WorkerTask } from './worker-types';
+import type {
+  WorkerErrorResponse,
+  WorkerResponse,
+  WorkerSuccessResponse,
+  WorkerTask
+} from './worker-types';
 import { autoDispose, createPool } from './create-pool';
-import { getHardwareConcurrency } from './concurrency';
 import { PixeliftWorkerError } from '../error';
-import { getTransferList } from '@/core/decode/decodeWithCanvasWorker.ts';
 
-const WORKER_SCRIPT_URL = new URL('./worker-script.worker', import.meta.url);
+const WORKER_SCRIPT_URL = new URL('./worker-script.worker.ts', import.meta.url);
 const DEFAULT_TIMEOUT = 5_000;
 
 export interface WorkerHandle {
-  postTask<T = unknown>(task: WorkerTask): Promise<T>;
+  postTask<T = unknown>(task: WorkerTask, transferables?: Transferable[]): Promise<T>;
+
   terminate(): void;
 }
 
@@ -21,7 +25,6 @@ export class ManagedWorker implements WorkerHandle {
       reject: (reason?: any) => void;
     }
   >();
-  private nextId = 1;
 
   constructor() {
     this.worker = new Worker(WORKER_SCRIPT_URL, { type: 'module' });
@@ -29,22 +32,14 @@ export class ManagedWorker implements WorkerHandle {
     this.worker.onerror = this.handleError.bind(this);
   }
 
-  postTask<T = unknown>(task: WorkerTask): Promise<T> {
-    const id = this.nextId++;
-    const message = { ...task, id };
-
-    // DEBUG: Log what we're sending to the worker
-    console.log('[DEBUG] Sending to worker:', message);
-
+  postTask<T = unknown>(task: WorkerTask, transferables: Transferable[] = []): Promise<T> {
+    const message = task;
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
-
-      // Defensive: wrap postMessage in try/catch in case transfer list is invalid
+      this.pending.set(message.id, { resolve, reject });
       try {
-        this.worker.postMessage(message, getTransferList(task.data));
+        this.worker.postMessage(message, transferables);
       } catch (err) {
-        console.error('[DEBUG] Error posting message to worker:', err);
-        this.pending.delete(id);
+        this.pending.delete(message.id);
         reject(err);
       }
     });
@@ -61,46 +56,28 @@ export class ManagedWorker implements WorkerHandle {
 
   private handleMessage(event: MessageEvent<WorkerResponse>) {
     const data = event.data;
-
-    // DEBUG: Log what we received from the worker
-    console.log('[DEBUG] Received from worker:', data);
-    console.log('[DEBUG] Data type:', typeof data);
-    console.log('[DEBUG] Data keys:', data ? Object.keys(data) : 'no keys');
-
-    if (!data || typeof data !== 'object') {
-      console.warn('[DEBUG] Ignoring malformed message:', data);
-      return; // ignore malformed message
+    if (!data || typeof data !== 'object' || !('id' in data) || !('type' in data)) {
+      return;
     }
 
     const { id, type } = data;
-    console.log('[DEBUG] Extracted - id:', id, 'type:', type);
-
-    const task = this.pending.get(id);
-    if (!task) {
-      console.warn('[DEBUG] No pending type found for id:', id);
+    const taskCallback = this.pending.get(id);
+    if (!taskCallback) {
       return;
     }
 
     if (type === 'success') {
-      console.log('[DEBUG] Success response, result:', data.result);
-      task.resolve(data.result);
+      taskCallback.resolve(data as WorkerSuccessResponse);
     } else if (type === 'error') {
-      console.log('[DEBUG] Error response:', data.error);
-      const errData = data.error || {};
-      task.reject(
+      const errorResponse = data as WorkerErrorResponse;
+      const errData = errorResponse.error || {};
+      taskCallback.reject(
         new PixeliftWorkerError(errData.message || 'Worker error', { cause: errData })
       );
     } else {
-      // Unknown message type
-      console.error('[DEBUG] Unknown message type received:', {
-        type,
-        typeOf: typeof type,
-        fullData: data,
-        keys: Object.keys(data)
-      });
-      task.reject(
+      taskCallback.reject(
         new PixeliftWorkerError(`Unknown worker message type: ${type}`, {
-          data
+          cause: { receivedMessage: data }
         })
       );
     }
@@ -109,13 +86,10 @@ export class ManagedWorker implements WorkerHandle {
   }
 
   private handleError(event: ErrorEvent) {
-    console.error('[DEBUG] Worker error event:', event);
-
-    // The ErrorEvent itself carries message and possibly error
-    const errorMessage = event.message || 'Worker encountered an error';
-    const errorDetail = event.error ?? event;
-
-    const error = new PixeliftWorkerError(errorMessage, errorDetail);
+    event.preventDefault();
+    const errorMessage = event.message || 'Worker encountered an unhandled error';
+    const errorCause = event.error ?? new Error(errorMessage);
+    const error = new PixeliftWorkerError(errorMessage, { cause: errorCause });
 
     for (const { reject } of this.pending.values()) {
       reject(error);
@@ -127,7 +101,16 @@ export class ManagedWorker implements WorkerHandle {
 export const workerPool = {
   pool: createPool<WorkerHandle>(
     Array.from(
-      { length: Math.max(1, Math.floor(getHardwareConcurrency() / 2)) },
+      {
+        length: Math.max(
+          1,
+          Math.floor(
+            (typeof navigator !== 'undefined' && navigator.hardwareConcurrency
+              ? navigator.hardwareConcurrency
+              : 2) / 2
+          )
+        )
+      },
       () => new ManagedWorker()
     ),
     DEFAULT_TIMEOUT,
@@ -140,9 +123,7 @@ export const workerPool = {
   ): Promise<T> {
     const worker = await this.pool.acquire();
     try {
-      // Notice: we pass transferables to postTask *inside* ManagedWorker
-      // so no need to forward here, unless you plan to override
-      return await worker.postTask<T>(task);
+      return await worker.postTask<T>(task, transferables);
     } finally {
       await this.pool.release(worker);
     }
@@ -150,8 +131,9 @@ export const workerPool = {
 
   async reconfigure(concurrency: number) {
     await this.pool.clear();
+    const newConcurrency = Math.max(1, concurrency);
     this.pool = createPool<WorkerHandle>(
-      Array.from({ length: concurrency }, () => new ManagedWorker()),
+      Array.from({ length: newConcurrency }, () => new ManagedWorker()),
       DEFAULT_TIMEOUT,
       (worker) => worker.terminate()
     );

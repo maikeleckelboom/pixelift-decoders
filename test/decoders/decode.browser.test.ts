@@ -1,6 +1,6 @@
 import { listBrowserSupportedExtensions } from '@test/fixtures/assets';
 import { decode } from '@/core/decode/decode';
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 const ASSET_LOADING_TIMEOUT = 30000;
 const DECODE_TEST_TIMEOUT = 10000;
@@ -53,24 +53,38 @@ describe('decode in browser environment', () => {
     expect(assets.length).toBeGreaterThan(0);
   });
 
-  describe('canvas-based decoding', () => {
-    for (const ext of extensions) {
-      it(
-        `decodes pixelift.${ext} using canvas`,
-        async () => {
-          const { blob } = assets.find((a) => a.ext === ext) as TestAsset;
+  describe(
+    'canvas-based decoding',
+    () => {
+      for (const ext of extensions) {
+        it(
+          `decodes pixelift.${ext} using canvas`,
+          async () => {
+            const { blob } = assets.find((a) => a.ext === ext) as TestAsset;
 
-          const { data, width, height } = await decode(blob, {
-            preferWorker: true
-          });
+            const pixelData = await decode(blob, {
+              preferWorker: true,
+              resize: {
+                width: 50,
+                height: 50
+              }
+            });
 
-          expect(width).toBe(100);
-          expect(height).toBe(100);
-          expect(data).toBeInstanceOf(Uint8ClampedArray);
-          expect(data.length).toBe(width * height * 4);
-        },
-        DECODE_TEST_TIMEOUT
-      );
-    }
-  });
+            console.log(
+              `We got 'em! ${pixelData.width}x${pixelData.height} @ ${pixelData.data.length} bytes 🔒`
+            );
+
+            const { data, width, height } = pixelData;
+
+            expect(width).toBe(50);
+            expect(height).toBe(50);
+            expect(data).toBeInstanceOf(Uint8ClampedArray);
+            expect(data.length).toBe(width * height * 4);
+          },
+          DECODE_TEST_TIMEOUT
+        );
+      }
+    },
+    ASSET_LOADING_TIMEOUT
+  );
 });

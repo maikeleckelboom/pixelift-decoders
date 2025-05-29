@@ -4,7 +4,7 @@ import type {
   WorkerTask
 } from '@/core/pool/worker-types.ts';
 import { calculateDrawRectSharpLike } from '@/core/utils/canvas.ts';
-import { PixeliftWorkerError } from '@/core/error.ts'; // Custom error type
+import { PixeliftWorkerError } from '@/core/error.ts';
 
 // Worker state: reuse single OffscreenCanvas and context to reduce overhead
 let offscreenCanvas: OffscreenCanvas | null = null;
@@ -24,10 +24,9 @@ function ensureCanvasAndContext(
   ) {
     offscreenCanvas = new OffscreenCanvas(width, height);
     context = offscreenCanvas.getContext('2d', {
-      // Add context defaults here if needed, e.g.:
-      // alpha: false,
-      // desynchronized: true
-    });
+      willReadFrequently: true,
+      alpha: true
+    } as CanvasRenderingContext2DSettings);
     if (!context) {
       throw new PixeliftWorkerError(
         'Failed to get 2D context from OffscreenCanvas in worker.'
@@ -55,23 +54,30 @@ async function processImage(
   imageData: Uint8Array,
   resizeOptions?: WorkerTask['resize']
 ): Promise<{ data: Uint8ClampedArray; width: number; height: number }> {
-  const blob = new Blob([imageData]);
+  const blob = new Blob([imageData], { type: 'image/png' });
   let imageBitmap: ImageBitmap | null = null;
 
   try {
-    imageBitmap = await createImageBitmap(blob);
+    console.log('[worker] About to call createImageBitmap on blob');
+
+    imageBitmap = await createImageBitmap(blob, {
+      resizeWidth: resizeOptions?.width ?? 0,
+      resizeHeight: resizeOptions?.height ?? 0
+    });
 
     const targetWidth = resizeOptions?.width ?? imageBitmap.width;
     const targetHeight = resizeOptions?.height ?? imageBitmap.height;
 
-    const ctx = ensureCanvasAndContext(targetWidth, targetHeight);
+    const ctx = ensureCanvasAndContext(imageBitmap.width, imageBitmap.height);
     ctx.clearRect(0, 0, targetWidth, targetHeight);
 
-    const drawRect = calculateDrawRectSharpLike(imageBitmap.width, imageBitmap.height, {
+    const drawRect = calculateDrawRectSharpLike(targetWidth, targetHeight, {
       width: targetWidth,
       height: targetHeight,
       fit: resizeOptions?.fit
     });
+
+    console.log('drawRect', drawRect);
 
     ctx.drawImage(
       imageBitmap,
@@ -89,8 +95,8 @@ async function processImage(
 
     return {
       data: outputImageData.data,
-      width: targetWidth,
-      height: targetHeight
+      width: outputImageData.width,
+      height: outputImageData.height
     };
   } finally {
     imageBitmap?.close();
