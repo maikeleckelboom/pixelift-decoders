@@ -1,9 +1,23 @@
-import { createCanvasPool } from '@/core/pool/canvas-pool.ts';
-import { createWorkerPool } from '@/core/pool/worker-pool.ts';
-import { createWithResource } from '@/core/pool/create-with-resource.ts';
+import { withCanvas } from '@/core/pool/canvas-pool.ts';
+import { withWorker } from '@/core/pool/worker-pool.ts';
 
-const myCanvasPool = createCanvasPool(10);
-export const withCanvas = createWithResource(myCanvasPool);
+export async function exampleUsage() {
+  const result = await withCanvas(async (canvas) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Failed to get canvas context');
+    ctx.fillStyle = 'red';
+    ctx.fillRect(0, 0, 100, 100);
+    return canvas;
+  });
 
-const myWorkerPool = createWorkerPool(8);
-export const withWorker = createWithResource(myWorkerPool);
+  console.log('Canvas operation completed:', result);
+
+  const workerResult = await withWorker(async (worker) => {
+    return new Promise((resolve) => {
+      worker.onmessage = (event) => resolve(event.data);
+      worker.postMessage({ task: 'process', data: [0, 125, 123, 255] });
+    });
+  });
+
+  console.log('Worker operation completed:', workerResult);
+}

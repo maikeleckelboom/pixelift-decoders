@@ -2,7 +2,7 @@
  * Generic concurrency limiter for async tasks.
  * Use this to limit simultaneous running tasks.
  */
-export function createConcurrencyPool(limit: number = 5) {
+export function createConcurrencyPool(limit: number) {
   let active = 0;
   const queue: (() => void)[] = [];
 

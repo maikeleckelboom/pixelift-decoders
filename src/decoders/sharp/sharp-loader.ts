@@ -3,20 +3,41 @@ import { default as SharpInstance } from 'sharp';
 export type Sharp = typeof SharpInstance;
 
 let _sharp: Sharp | null = null;
+let sharpPromise: Promise<Sharp> | null = null;
 
 export async function importSharp(): Promise<Sharp> {
   if (_sharp) return _sharp;
+  if (sharpPromise) return sharpPromise;
 
-  try {
-    return (_sharp = (await import('sharp')).default);
-  } catch (error) {
-    _sharp = null;
-    const msg = createErrorMessage(error);
-    const err = new Error(msg);
-    err.name = 'SharpLoaderError';
-    if (error instanceof Error) err.cause = error;
-    throw err;
-  }
+  sharpPromise = import('sharp')
+    .then((mod) => {
+      _sharp = mod.default;
+      return _sharp;
+    })
+    .catch((error) => {
+      _sharp = null;
+      sharpPromise = null;
+      throw wrapSharpError(error);
+    });
+
+  return sharpPromise;
+}
+
+function wrapSharpError(error: unknown): Error {
+  const msg = createErrorMessage(error);
+  const err = new Error(msg);
+  err.name = 'SharpLoaderError';
+  if (error instanceof Error) err.cause = error;
+  return err;
+}
+
+function isMissingError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    error.code === 'MODULE_NOT_FOUND' &&
+    /sharp/.test(error.message)
+  );
 }
 
 function createErrorMessage(error: unknown): string {
@@ -49,13 +70,4 @@ ${error instanceof Error ? error.message : String(error)}
 
 📖 See troubleshooting guide: https://sharp.pixelplumbing.com/install
 `.trim();
-}
-
-function isMissingError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    'code' in error &&
-    error.code === 'MODULE_NOT_FOUND' &&
-    /sharp/.test(error.message)
-  );
 }
