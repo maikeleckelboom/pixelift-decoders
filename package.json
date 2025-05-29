@@ -1,0 +1,96 @@
+{
+  "name": "pixelift",
+  "version": "0.1.0",
+  "description": "Cross-platform image decoder: convert any image source (URL, Blob, HTML element, etc.) into consistent 8-bit RGBA pixel data, with a single lightweight API for browser & Node.js.",
+  "author": "Maikel Eckelboom",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser/index.d.ts",
+      "require": "./dist/browser/index.cjs",
+      "import": "./dist/browser/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "require": "./dist/server/index.cjs",
+      "import": "./dist/server/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "browser": {
+    "sharp": false
+  },
+  "sideEffects": false,
+  "engines": {
+    "npm": ">=9.0.0",
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@10.11.0",
+  "keywords": [
+    "image-decoder",
+    "raw-pixels",
+    "rgba",
+    "cross-platform",
+    "browser",
+    "nodejs",
+    "ssr",
+    "webcodecs",
+    "offscreen-canvas",
+    "sharp",
+    "canvas",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "buffer": "git+https://github.com/maikeleckelboom/pixelift.git"
+  },
+  "homepage": "https://github.com/maikeleckelboom/pixelift#readme",
+  "bugs": {
+    "buffer": "https://github.com/maikeleckelboom/pixelift/issues"
+  },
+  "scripts": {
+    "dev": "vitest --watch",
+    "test": "vitest --run",
+    "test:browser": "vitest --project browser",
+    "test:server": "vitest --project server",
+    "bench": "vitest --run bench --reporter verbose",
+    "bench:server": "vitest --project server --run bench --reporter verbose",
+    "bench:browser": "vitest --project browser --run bench --reporter verbose",
+    "format": "prettier --write .",
+    "lint": "eslint 'src/**/*.ts' --max-warnings=0",
+    "lint:fix": "eslint 'src/**/*.ts' --fix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.24",
+    "@typescript-eslint/eslint-plugin": "^8.32.1",
+    "@typescript-eslint/parser": "^8.32.1",
+    "@vitest/browser": "^3.1.4",
+    "eslint": "^9.27.0",
+    "eslint-config-prettier": "^10.1.5",
+    "happy-dom": "^17.4.7",
+    "playwright": "^1.52.0",
+    "prettier": "^3.5.3",
+    "sharp": "^0.34.1",
+    "tsup": "^8.5.0",
+    "typescript-eslint": "^8.32.1",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.1.4"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.34.1"
+  }
+}
