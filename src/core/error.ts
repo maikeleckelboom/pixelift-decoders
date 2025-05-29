@@ -36,7 +36,7 @@ export class PixeliftFetchAbortedError extends PixeliftError {
 }
 
 export class PixeliftWorkerError extends PixeliftError {
-  constructor(message: string, options?: { cause?: unknown }) {
+  constructor(message: string, options?: { cause?: unknown; [key: string]: any }) {
     super(`Worker error: ${message}`, options);
   }
 }

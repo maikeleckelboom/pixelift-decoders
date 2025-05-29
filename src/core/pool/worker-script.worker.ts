@@ -1,110 +1,147 @@
-import { calculateDrawRectSharpLike } from '@/core/utils/canvas';
-import { getCanvasDefaultSettings } from '@/decoders/canvas/defaults';
+import type {
+  WorkerErrorResponse,
+  WorkerSuccessResponse,
+  WorkerTask
+} from '@/core/pool/worker-types.ts';
+import { calculateDrawRectSharpLike } from '@/core/utils/canvas.ts';
+import { PixeliftWorkerError } from '@/core/error.ts'; // Custom error type
 
-const canvasPool: OffscreenCanvas[] = [];
-const ctxPool: Record<number, OffscreenCanvasRenderingContext2D> = {};
+// Worker state: reuse single OffscreenCanvas and context to reduce overhead
+let offscreenCanvas: OffscreenCanvas | null = null;
+let context: OffscreenCanvasRenderingContext2D | null = null;
 
-function getCanvas(
+/**
+ * Initialize or reuse OffscreenCanvas and its 2D context.
+ */
+function ensureCanvasAndContext(
   width: number,
   height: number
-): {
-  canvas: OffscreenCanvas;
-  ctx: OffscreenCanvasRenderingContext2D;
-} {
-  // Try to find matching canvas in pool
-  for (const canvas of canvasPool) {
-    if (canvas.width === width && canvas.height === height) {
-      const ctx = ctxPool[canvas.width];
-      return { canvas, ctx: ctx! };
+): OffscreenCanvasRenderingContext2D {
+  if (
+    !offscreenCanvas ||
+    offscreenCanvas.width !== width ||
+    offscreenCanvas.height !== height
+  ) {
+    offscreenCanvas = new OffscreenCanvas(width, height);
+    context = offscreenCanvas.getContext('2d', {
+      // Add context defaults here if needed, e.g.:
+      // alpha: false,
+      // desynchronized: true
+    });
+    if (!context) {
+      throw new PixeliftWorkerError(
+        'Failed to get 2D context from OffscreenCanvas in worker.'
+      );
+    }
+  } else if (!context) {
+    context = offscreenCanvas.getContext('2d');
+    if (!context) {
+      throw new PixeliftWorkerError(
+        'Failed to re-acquire 2D context from OffscreenCanvas in worker.'
+      );
     }
   }
+  // Make sure canvas size is updated (important if dimensions changed)
+  if (offscreenCanvas.width !== width) offscreenCanvas.width = width;
+  if (offscreenCanvas.height !== height) offscreenCanvas.height = height;
 
-  // Create new canvas
-  const canvas = new OffscreenCanvas(width, height);
-  const ctx = canvas.getContext('2d', getCanvasDefaultSettings());
-  if (!ctx) throw new Error('Failed to create canvas context');
-
-  // Add to pools
-  canvasPool.push(canvas);
-  ctxPool[canvas.width] = ctx;
-
-  return { canvas, ctx };
+  return context;
 }
 
-self.onmessage = async (event: MessageEvent<WorkerTask>) => {
-  const { id, type, data, options } = event.data;
+/**
+ * Decode and resize image, returning raw pixel data.
+ */
+async function processImage(
+  imageData: Uint8Array,
+  resizeOptions?: WorkerTask['resize']
+): Promise<{ data: Uint8ClampedArray; width: number; height: number }> {
+  const blob = new Blob([imageData]);
+  let imageBitmap: ImageBitmap | null = null;
 
   try {
-    if (type !== 'image-decode') {
-      throw new Error(`Unsupported task type: ${type}`);
-    }
+    imageBitmap = await createImageBitmap(blob);
 
-    let imageBitmap: ImageBitmap;
+    const targetWidth = resizeOptions?.width ?? imageBitmap.width;
+    const targetHeight = resizeOptions?.height ?? imageBitmap.height;
 
-    // Handle different input types
-    if (data.type === 'bitmap') {
-      imageBitmap = data.bitmap;
-    } else if (data.type === 'buffer') {
-      const blob = new Blob([data.buffer]);
-      imageBitmap = await createImageBitmap(blob);
-    } else if (data.type === 'url') {
-      const response = await fetch(data.url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const blob = await response.blob();
-      imageBitmap = await createImageBitmap(blob);
-    } else {
-      throw new Error('Invalid data type');
-    }
+    const ctx = ensureCanvasAndContext(targetWidth, targetHeight);
+    ctx.clearRect(0, 0, targetWidth, targetHeight);
 
-    // Calculate target dimensions
-    const targetWidth = options?.resize?.width ?? imageBitmap.width;
-    const targetHeight = options?.resize?.height ?? imageBitmap.height;
+    const drawRect = calculateDrawRectSharpLike(imageBitmap.width, imageBitmap.height, {
+      width: targetWidth,
+      height: targetHeight,
+      fit: resizeOptions?.fit
+    });
 
-    // Get canvas from pool
-    const { canvas, ctx } = getCanvas(targetWidth, targetHeight);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Calculate draw parameters
-    const { sx, sy, sw, sh, dx, dy, dw, dh } = calculateDrawRectSharpLike(
-      imageBitmap.width,
-      imageBitmap.height,
-      {
-        width: targetWidth,
-        height: targetHeight,
-        fit: options?.resize?.fit
-      }
+    ctx.drawImage(
+      imageBitmap,
+      drawRect.sx,
+      drawRect.sy,
+      drawRect.sw,
+      drawRect.sh,
+      drawRect.dx,
+      drawRect.dy,
+      drawRect.dw,
+      drawRect.dh
     );
 
-    // Draw and extract pixels
-    ctx.drawImage(imageBitmap, sx, sy, sw, sh, dx, dy, dw, dh);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const outputImageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
 
-    // Cleanup
-    imageBitmap.close();
+    return {
+      data: outputImageData.data,
+      width: targetWidth,
+      height: targetHeight
+    };
+  } finally {
+    imageBitmap?.close();
+  }
+}
 
-    // Send response with transferable
-    self.postMessage(
-      {
-        id,
-        type: 'success',
-        result: {
-          pixels: imageData.data,
-          width: canvas.width,
-          height: canvas.height
-        }
-      },
-      [imageData.data.buffer]
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    self.postMessage({
+/**
+ * Message handler for worker.
+ */
+self.onmessage = async (event: MessageEvent<WorkerTask>) => {
+  const { id, type, data, resize } = event.data;
+
+  if (type !== 'decode') {
+    const unknownTypeError: WorkerErrorResponse = {
       id,
       type: 'error',
       error: {
-        message,
-        stack: error instanceof Error ? error.stack : undefined,
-        name: error instanceof Error ? error.name : 'Error'
+        name: 'UnknownTypeError',
+        message: `Unknown type received by worker: ${type}`
       }
-    });
+    };
+    self.postMessage(unknownTypeError);
+    return;
   }
+
+  try {
+    const result = await processImage(data, resize);
+    const response: WorkerSuccessResponse = {
+      id,
+      type: 'success',
+      width: result.width,
+      height: result.height,
+      result: result.data
+    };
+    self.postMessage(response, [result.data.buffer]);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorResponse: WorkerErrorResponse = {
+      id,
+      type: 'error',
+      error: {
+        message: `Worker processing failed: ${errorMessage}`
+      }
+    };
+    self.postMessage(errorResponse);
+  }
+};
+
+/**
+ * Global error handler for the worker.
+ */
+self.onerror = (event) => {
+  return false;
 };

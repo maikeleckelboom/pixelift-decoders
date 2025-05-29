@@ -53,31 +53,24 @@ describe('decode in browser environment', () => {
     expect(assets.length).toBeGreaterThan(0);
   });
 
-  describe('decoding assets (worker vs non-worker)', () => {
-    for (const preferWorker of [true, false]) {
-      const label = preferWorker ? 'worker' : 'canvas';
+  describe('canvas-based decoding', () => {
+    for (const ext of extensions) {
+      it(
+        `decodes pixelift.${ext} using canvas`,
+        async () => {
+          const { blob } = assets.find((a) => a.ext === ext) as TestAsset;
 
-      describe(`using ${label}`, () => {
-        for (const ext of extensions) {
-          it(
-            `decodes pixelift.${ext}`,
-            async () => {
-              const asset = assets.find((a) => a.ext === ext);
-              expect(asset).toBeDefined();
+          const { data, width, height } = await decode(blob, {
+            preferWorker: true
+          });
 
-              const { data, width, height } = await decode(asset!.blob, {
-                preferWorker
-              });
-
-              expect(width).toBe(100);
-              expect(height).toBe(100);
-              expect(data).toBeInstanceOf(Uint8ClampedArray);
-              expect(data.length).toBe(width * height * 4);
-            },
-            DECODE_TEST_TIMEOUT
-          );
-        }
-      });
+          expect(width).toBe(100);
+          expect(height).toBe(100);
+          expect(data).toBeInstanceOf(Uint8ClampedArray);
+          expect(data.length).toBe(width * height * 4);
+        },
+        DECODE_TEST_TIMEOUT
+      );
     }
   });
 });

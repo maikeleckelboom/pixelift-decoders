@@ -8,8 +8,12 @@ export const SERVER_MIME_TYPES: Record<string, `image/${string}`> = {
 } as const;
 
 const BROWSER_MIME_TYPES: Record<string, `image/${string}`> = {
-  ...SERVER_MIME_TYPES,
-  heic: 'image/heic'
+  jpeg: 'image/jpeg',
+  jpg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  gif: 'image/gif'
 } as const;
 
 const SERVER_SUPPORTED_EXTENSIONS = Object.keys(SERVER_MIME_TYPES) as Array<

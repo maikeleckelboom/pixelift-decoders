@@ -92,7 +92,7 @@ async function decode(
  * Create a concurrency limiter to cap simultaneous async tasks.
  * Returns a function that wraps tasks and limits concurrency.
  */
-function createConcurrencyPool(limit: number): <T>(task: () => Promise<T>) => Promise<T>;
+function createConcurrencyPool(limit: number): <T>(type: () => Promise<T>) => Promise<T>;
 ```
 
 Use it to **wrap decode calls** to keep UI responsive and resource usage stable under load.
