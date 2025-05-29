@@ -1,0 +1,70 @@
+import type { TypedWorker, WorkerResponse } from '@/core/pool/worker-pool.ts';
+import type { BrowserInput } from './types';
+
+function getTransferList(input: BrowserInput): Transferable[] {
+  if (input instanceof Uint8Array) {
+    return [input.buffer];
+  }
+  if (input instanceof ArrayBuffer) {
+    return [input];
+  }
+  if (ArrayBuffer.isView(input)) {
+    return [input.buffer];
+  }
+  if (typeof ReadableStream !== 'undefined' && input instanceof ReadableStream) {
+    return [input];
+  }
+  if (typeof ImageBitmap !== 'undefined' && input instanceof ImageBitmap) {
+    return [input];
+  }
+  if (typeof OffscreenCanvas !== 'undefined' && input instanceof OffscreenCanvas) {
+    return [input];
+  }
+  if (typeof ImageData !== 'undefined' && input instanceof ImageData) {
+    return [input.data.buffer];
+  }
+  return [];
+}
+
+function normalizeInputToUint8Array(input: BrowserInput): Uint8Array {
+  if (typeof input === 'string') {
+    return new TextEncoder().encode(input);
+  }
+  if (input instanceof Uint8Array) {
+    return input;
+  }
+  if (input instanceof ArrayBuffer) {
+    return new Uint8Array(input);
+  }
+  if (ArrayBuffer.isView(input)) {
+    return new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+  }
+  if (input instanceof ImageData) {
+    return new Uint8Array(input.data.buffer);
+  }
+  throw new Error('Unsupported input type for worker');
+}
+
+export async function processWithWorker(
+  worker: TypedWorker,
+  input: BrowserInput
+): Promise<WorkerResponse['result']> {
+  return new Promise((resolve, reject) => {
+    worker.onmessage = (event) => {
+      if (event.data.task === 'process') {
+        resolve(event.data.result);
+      } else {
+        reject(new Error('Unexpected worker response'));
+      }
+    };
+
+    worker.worker.onerror = (event) => {
+      reject(new Error(event.message || 'Worker error'));
+    };
+
+    const normalizedInput = normalizeInputToUint8Array(input);
+    const transfer = getTransferList(normalizedInput);
+
+    worker.postMessage({ task: 'process', data: normalizedInput }, transfer);
+  });
+}

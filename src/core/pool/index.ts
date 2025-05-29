@@ -3,4 +3,4 @@ export {
   autoDispose,
   autoDisposeOnUnload,
   autoDisposeOnExit
-} from './create-pool.ts';
+} from './pool-factory.ts';

@@ -1,19 +1,28 @@
-import { autoDispose, createPool } from '@/core/pool/create-pool.ts';
-import type { Pool } from '@/core/pool/types.ts';
-import { isServer } from '@/core/env.ts';
-import { createWithResource } from '@/core/pool/create-with-resource.ts';
-import type { WorkerRequest, WorkerResponse } from '@/core/pool/worker-messages.ts';
+import { autoDispose, createPool } from '@/core/pool/pool-factory';
+import type { Pool } from '@/core/pool/types';
+import { createWithResource } from '@/core/pool/create-with-resource';
+import { getHardwareConcurrency } from '@/core/pool/concurrency';
+import type {
+  TypedWorker,
+  WorkerRequest,
+  WorkerResponse
+} from '@/core/pool/worker-types.ts';
 
-const WORKER_SCRIPT_URL = new URL('./worker-script.worker.ts', import.meta.url);
+const WORKER_SCRIPT_URL = new URL('./worker-script.worker', import.meta.url);
 
-export interface TypedWorker {
-  worker: Worker;
-  terminate(): void;
-  postMessage(message: WorkerRequest, transfer?: Transferable[]): void;
-  onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null;
+export function createWorkerPool(
+  maxWorkers: number | null = null,
+  timeoutMs = 5000
+): Pool<TypedWorker> {
+  const cores = getHardwareConcurrency(4);
+  maxWorkers = maxWorkers ?? Math.max(1, Math.min(cores, 16));
+  const workers = Array.from({ length: maxWorkers }, createDecodeWorker);
+  const pool = createPool(workers, timeoutMs, (worker) => worker.terminate());
+  autoDispose(pool);
+  return pool;
 }
 
-function createDecodeWorker(): TypedWorker {
+export function createDecodeWorker(): TypedWorker {
   const worker = new Worker(WORKER_SCRIPT_URL, { type: 'module' });
   return {
     worker,
@@ -30,19 +39,11 @@ function createDecodeWorker(): TypedWorker {
     },
     set onmessage(handler) {
       worker.onmessage = handler;
+    },
+    set onerror(handler: (event: ErrorEvent) => void) {
+      worker.onerror = handler;
     }
   };
-}
-
-export function createWorkerPool(maxWorkers = 4, timeoutMs = 5000): Pool<TypedWorker> {
-  if (isServer()) {
-    throw new Error('Worker pool cannot be created in server environment');
-  }
-
-  const workers = Array.from({ length: maxWorkers }, createDecodeWorker);
-  const pool = createPool(workers, timeoutMs, (worker) => worker.terminate());
-  autoDispose(pool);
-  return pool;
 }
 
 const defaultWorkerPool = createWorkerPool();

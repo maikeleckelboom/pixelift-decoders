@@ -19,6 +19,5 @@ export function isNodeWorker(): boolean {
 }
 
 export function isServer(): boolean {
-  // true if Node.js environment (including workers)
   return typeof process !== 'undefined' && !!process.versions?.node;
 }

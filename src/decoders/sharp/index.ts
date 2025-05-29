@@ -1,6 +1,6 @@
 import type { SharpInput, SharpOptions } from 'sharp';
-import type { PixelData } from '@/decoders/sharp/types.ts';
-import { importSharp, type Sharp } from '@/decoders/sharp/sharp-loader.ts';
+import type { PixelData } from '@/decoders/sharp/types';
+import { importSharp, type Sharp } from '@/decoders/sharp/sharp-loader';
 
 export class DecodeError extends Error {
   constructor(message: string, cause?: unknown) {

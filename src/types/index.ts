@@ -12,5 +12,6 @@ export type BrowserInput =
   | string
   | ReadableStream
   | BufferSource
+  | Uint8Array
   | SVGElement
   | ImageBitmapSource;

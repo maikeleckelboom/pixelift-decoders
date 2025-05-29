@@ -1,15 +1,14 @@
-import { autoDispose, createPool } from '@/core/pool/create-pool.ts';
-import type { Pool } from '@/core/pool/types.ts';
-import { createWithResource } from '@/core/pool/create-with-resource.ts';
+import { autoDispose, createPool } from '@/core/pool/pool-factory';
+import type { Pool } from '@/core/pool/types';
+import { createWithResource } from '@/core/pool/create-with-resource';
+import { getHardwareConcurrency } from '@/core/pool/concurrency';
 
 export function createCanvasPool(
   maxConcurrentCanvases: number | null = null
 ): Pool<OffscreenCanvas> {
-  if (typeof OffscreenCanvas === 'undefined') {
-    throw new Error('OffscreenCanvas is not supported in this environment');
-  }
+  const cores = getHardwareConcurrency(4);
 
-  maxConcurrentCanvases ??= Math.floor(navigator.hardwareConcurrency / 2);
+  maxConcurrentCanvases ??= Math.max(1, Math.floor(cores / 2));
 
   const canvases = Array.from(
     { length: maxConcurrentCanvases },
@@ -23,6 +22,6 @@ export function createCanvasPool(
   return pool;
 }
 
-export const defaultCanvasPool = createCanvasPool(8);
+export const defaultCanvasPool = createCanvasPool();
 
 export const withCanvas = createWithResource(defaultCanvasPool);

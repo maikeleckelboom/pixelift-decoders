@@ -1,5 +1,5 @@
-import { withCanvas } from '@/core/pool/canvas-pool.ts';
-import { withWorker } from '@/core/pool/worker-pool.ts';
+import { withCanvas } from '@/core/pool/canvas-pool';
+import { withWorker } from '@/core/pool/worker-pool';
 
 export async function exampleUsage() {
   const result = await withCanvas(async (canvas) => {
@@ -13,10 +13,8 @@ export async function exampleUsage() {
   console.log('Canvas operation completed:', result);
 
   const workerResult = await withWorker(async (worker) => {
-    return new Promise((resolve) => {
-      worker.onmessage = (event) => resolve(event.data);
-      worker.postMessage({ task: 'process', data: [0, 125, 123, 255] });
-    });
+    worker.onmessage = (event) => event.data.result;
+    worker.postMessage({ task: 'process', data: new Uint8Array([1, 2, 3, 4]) });
   });
 
   console.log('Worker operation completed:', workerResult);
