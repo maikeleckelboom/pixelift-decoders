@@ -1,4 +1,4 @@
-import type { BrowserInput, PixelData, ResizeOptions } from '@/types';
+import type { PixelData, ResizeOptions } from '@/types';
 import {
   decodeWithCanvasWorker,
   isWorkerSupported
@@ -15,15 +15,15 @@ export async function decode(
   options?: DecodeOptions
 ): Promise<PixelData> {
   if (options?.preferWorker && isWorkerSupported()) {
-    console.log('👷️ Using worker decode path');
+    console.log('👷️ Using worker for canvas decode');
     try {
       return await decodeWithCanvasWorker(input, options);
     } catch (e) {
-      console.warn('Worker decode failed, falling back to canvas:', e);
+      console.warn('Worker decode failed, failing back to canvas:', e);
     }
+  } else {
+    console.log('🧵 Using main thread for canvas decode');
   }
-
-  console.log('🖼️ Using canvas decode path');
 
   return await decodeWithCanvas(input, options);
 }

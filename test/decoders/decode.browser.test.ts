@@ -1,6 +1,6 @@
 import { listBrowserSupportedExtensions } from '@test/fixtures/assets';
 import { decode } from '@/core/decode/decode';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, test } from 'vitest';
 
 const ASSET_LOADING_TIMEOUT = 30000;
 const DECODE_TEST_TIMEOUT = 10000;
@@ -57,12 +57,17 @@ describe('decode in browser environment', () => {
     'canvas-based decoding',
     () => {
       for (const ext of extensions) {
-        it(
+        test(
           `decodes pixelift.${ext} using canvas`,
           async () => {
-            const { blob } = assets.find((a) => a.ext === ext) as TestAsset;
+            const asset = assets.find((a) => a.ext === ext);
+            if (!asset) {
+              return;
+            }
 
-            const pixelData = await decode(blob, {
+            console.info(`[decode.test] Decoding ${asset.name} via Web Worker 👷️`);
+
+            const pixelData = await decode(asset.blob, {
               preferWorker: true,
               resize: {
                 width: 50,
@@ -70,9 +75,33 @@ describe('decode in browser environment', () => {
               }
             });
 
-            console.log(
-              `We got 'em! ${pixelData.width}x${pixelData.height} @ ${pixelData.data.length} bytes 🔒`
-            );
+            const { data, width, height } = pixelData;
+
+            expect(width).toBe(50);
+            expect(height).toBe(50);
+            expect(data).toBeInstanceOf(Uint8ClampedArray);
+            expect(data.length).toBe(width * height * 4);
+          },
+          DECODE_TEST_TIMEOUT
+        );
+
+        test(
+          `decodes pixelift.${ext} using canvas`,
+          async () => {
+            const asset = assets.find((a) => a.ext === ext);
+            if (!asset) {
+              return;
+            }
+
+            console.info(`[decode.test] Decoding ${asset.name} on main thread 🧵`);
+
+            const pixelData = await decode(asset.blob, {
+              preferWorker: false,
+              resize: {
+                width: 50,
+                height: 50
+              }
+            });
 
             const { data, width, height } = pixelData;
 

@@ -148,6 +148,16 @@ self.onmessage = async (event: MessageEvent<WorkerTask>) => {
 /**
  * Global error handler for the worker.
  */
-self.onerror = (event) => {
+self.onerror = (_e) => {
+  const errorResponse: WorkerErrorResponse = {
+    id: Math.random() * 1e9,
+    type: 'error',
+    error: {
+      name: 'WorkerError',
+      message: 'An unknown error occurred in the worker.',
+      stack: 'No stack trace available'
+    }
+  };
+  self.postMessage(errorResponse);
   return false;
 };
