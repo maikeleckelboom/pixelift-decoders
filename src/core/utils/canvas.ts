@@ -1,4 +1,4 @@
-import type { ResizeOptions } from '@/types';
+import type { BrowserInput, ResizeOptions } from '@/types';
 
 export function calculateDrawRectSharpLike(
   srcWidth: number,
@@ -80,4 +80,19 @@ export function calculateDrawRectSharpLike(
   const dy = Math.round((targetH - dh) / 2);
 
   return { sx, sy, sw, sh, dx, dy, dw, dh };
+}
+
+export function toTransferList(input: BrowserInput) {
+  if (input instanceof Blob) {
+    return [input];
+  } else if (input instanceof HTMLImageElement) {
+    return [input];
+  } else if (input instanceof HTMLCanvasElement) {
+    return [input];
+  } else if (input instanceof ImageBitmap) {
+    return [input];
+  } else if (ArrayBuffer.isView(input)) {
+    return [input.buffer];
+  }
+  return [];
 }

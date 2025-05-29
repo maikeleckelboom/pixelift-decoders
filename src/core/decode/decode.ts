@@ -8,9 +8,14 @@ interface DecodeOptions {
 }
 
 export async function decode(
-  input: BrowserInput,
+  input: ImageBitmapSource,
   options?: DecodeOptions
 ): Promise<PixelData> {
-  console.log('Pixelift: Decoding input with options:', options);
+  const preferWorker = options?.preferWorker ?? true;
+
+  if (preferWorker) {
+    return decodeWithCanvasWorker(input, options);
+  }
+
   return decodeWithCanvas(input, options);
 }

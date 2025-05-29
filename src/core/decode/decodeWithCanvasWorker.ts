@@ -6,6 +6,7 @@ import type {
   WorkerSuccessResponse
 } from '@/core/pool/worker-types.ts';
 import type { PixelData, ResizeOptions } from '@/types';
+import { toTransferList } from '@/core/utils/canvas.ts';
 
 let currentId = 0;
 function nextId(): number {
@@ -39,6 +40,7 @@ export function setupWorker(worker: TypedWorker) {
   };
 
   worker.onerror = (event: ErrorEvent) => {
+    // Reject all pending promises if worker errors
     for (const { reject } of pending.values()) {
       reject(event.error ?? new Error('Worker error'));
     }
@@ -46,47 +48,38 @@ export function setupWorker(worker: TypedWorker) {
   };
 }
 
-export async function decodeUsingCanvasWorker(
-  worker: TypedWorker,
-  data: Uint8Array,
-  resize?: ResizeOptions
-): Promise<Uint8ClampedArray> {
-  const id = nextId();
-
-  return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
-
-    const transfer = [data.buffer];
-    const message: WorkerRequest = { id, task: 'process', data, resize };
-
-    worker.postMessage(message, transfer);
-  });
-}
-
 export async function decodeWithCanvasWorker(
-  source: ImageBitmapSource,
-  options?: {
-    resize?: ResizeOptions;
-  }
+  input: ImageBitmapSource | Blob,
+  options?: { resize?: ResizeOptions }
 ): Promise<PixelData> {
-  if (typeof OffscreenCanvas === 'undefined') {
-    throw new Error('OffscreenCanvas is not supported in this environment');
-  }
-
-  const worker = new Worker(new URL('./decode.worker.ts', import.meta.url), {
-    type: 'module'
-  });
+  const worker: TypedWorker = {
+    worker: new Worker(new URL('@/core/pool/worker-script.worker.ts', import.meta.url), {
+      type: 'module'
+    }),
+    terminate() {
+      this.worker.terminate();
+    },
+    postMessage(message: WorkerRequest, transfer?: Transferable[]) {
+      this.worker.postMessage(message, transfer);
+    },
+    onmessage: null,
+    onerror: null
+  };
 
   setupWorker(worker);
 
-  try {
-    const data = await decodeUsingCanvasWorker(worker, source, options?.resize);
-    return {
-      width: source.width,
-      height: source.height,
-      data
-    };
-  } finally {
-    worker.terminate();
-  }
+  const id = nextId();
+  const resize = options?.resize;
+
+  const request: WorkerRequest = {
+    id,
+    task: 'process',
+    data: input instanceof Blob ? new Uint8Array(await input.arrayBuffer()) : input,
+    resize
+  };
+
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    worker.postMessage(request, toTransferList(request.data));
+  });
 }

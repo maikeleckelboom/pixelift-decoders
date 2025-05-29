@@ -3,11 +3,6 @@ import type {
   WorkerRequest,
   WorkerSuccessResponse
 } from '@/core/pool/worker-types';
-import {
-  CANVAS_RENDERING_CONTEXT_2D_SETTINGS,
-  IMAGE_BITMAP_OPTIONS,
-  IMAGE_DATA_SETTINGS
-} from '@/decoders/canvas/defaults.ts';
 import { calculateDrawRectSharpLike } from '@/core/utils/canvas.ts';
 
 let canvas: OffscreenCanvas | null = null;
@@ -25,15 +20,15 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
     if (!ctx) return returnError(id, 'Failed to get 2D context');
 
     const blob = new Blob([data]);
-    const imageBitmap = await createImageBitmap(blob, IMAGE_BITMAP_OPTIONS);
+    console.log(`Worker processing image with size: ${data.byteLength} bytes`);
+    const imageBitmap = await createImageBitmap(blob);
 
     const targetWidth = resize?.width ?? imageBitmap.width;
     const targetHeight = resize?.height ?? imageBitmap.height;
 
     if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-      canvas = new OffscreenCanvas(targetWidth, targetHeight);
-      ctx = canvas.getContext('2d', CANVAS_RENDERING_CONTEXT_2D_SETTINGS);
-      if (!ctx) return returnError(id, 'Failed to get 2D context after resize');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
     }
 
     ctx.clearRect(0, 0, targetWidth, targetHeight);
@@ -50,13 +45,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
 
     ctx.drawImage(imageBitmap, sx, sy, sw, sh, dx, dy, dw, dh);
 
-    const imageData = ctx.getImageData(
-      0,
-      0,
-      targetWidth,
-      targetHeight,
-      IMAGE_DATA_SETTINGS
-    );
+    const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
 
     const response: WorkerSuccessResponse = {
       id,
