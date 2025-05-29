@@ -84,8 +84,6 @@ export function createPool<T>(
       } else {
         available.push(resource);
       }
-    } else {
-      available.push(resource);
     }
   }
 

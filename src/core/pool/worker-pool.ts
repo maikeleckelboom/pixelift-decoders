@@ -15,18 +15,18 @@ export function createWorkerPool(maxWorkers = 4, timeoutMs = 5000): Pool<Worker>
   }
 
   const workers = Array.from({ length: maxWorkers }, createDecodeWorker);
+
   const pool = createPool(workers, timeoutMs, (worker) => worker.terminate());
+
   autoDispose(pool);
+
   return pool;
 }
 
-// Create a singleton default worker pool
-export const defaultWorkerPool = createWorkerPool();
+const defaultWorkerPool = createWorkerPool();
 
-// Helper to get the singleton pool
+export const withWorker = createWithResource(defaultWorkerPool);
+
 export function getWorkerPool(): Pool<Worker> {
   return defaultWorkerPool;
 }
-
-// Helper to use the singleton pool with an async fn
-export const withWorker = createWithResource(defaultWorkerPool);

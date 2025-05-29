@@ -1,10 +1,9 @@
-import { createCanvasPool, createWithCanvas } from '@/core/pool/canvas-pool.ts';
-import { createWorkerPool, createWithWorker } from '@/core/pool/worker-pool.ts';
+import { createCanvasPool } from '@/core/pool/canvas-pool.ts';
+import { createWorkerPool } from '@/core/pool/worker-pool.ts';
+import { createWithResource } from '@/core/pool/create-with-resource.ts';
 
-// Custom canvas pool with 10 canvases
 const myCanvasPool = createCanvasPool(10);
-const withCanvas = createWithCanvas(myCanvasPool!); // you can check for null in production code
+export const withCanvas = createWithResource(myCanvasPool);
 
-// Custom worker pool with 8 workers
 const myWorkerPool = createWorkerPool(8);
-const withWorker = createWithWorker(myWorkerPool!);
+export const withWorker = createWithResource(myWorkerPool);

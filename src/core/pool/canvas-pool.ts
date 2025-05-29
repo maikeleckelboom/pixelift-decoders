@@ -13,17 +13,16 @@ export function createCanvasPool(maxConcurrentCanvases = 5): Pool<OffscreenCanva
   );
 
   const pool = createPool(canvases);
+
   autoDispose(pool);
+
   return pool;
 }
 
-// Create a singleton default canvas pool
 export const defaultCanvasPool = createCanvasPool();
 
-// Helper to get the singleton pool
+export const withCanvas = createWithResource(defaultCanvasPool);
+
 export function getCanvasPool(): Pool<OffscreenCanvas> {
   return defaultCanvasPool;
 }
-
-// Helper to use the singleton pool with an async fn
-export const withCanvas = createWithResource(defaultCanvasPool);
