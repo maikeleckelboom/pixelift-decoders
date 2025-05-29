@@ -1,7 +1,10 @@
-import { autoDispose, createPool } from '@/core/pool/create-pool.ts';
-import type { Pool } from '@/core/pool/types';
+import { autoDispose, createPool, type Pool } from '@/core/pool/create-pool.ts';
 import { createWithResource } from '@/core/pool/create-with-resource';
 import { getHardwareConcurrency } from '@/core/pool/concurrency';
+import {
+  CANVAS_IMAGE_SMOOTHING_SETTINGS,
+  CANVAS_RENDERING_CONTEXT_2D_SETTINGS
+} from '@/decoders/canvas/defaults.ts';
 
 export function createCanvasPool(maxCanvases: number | null = null): Pool<OffscreenCanvas> {
   const cores = getHardwareConcurrency(4);
@@ -12,6 +15,19 @@ export function createCanvasPool(maxCanvases: number | null = null): Pool<Offscr
   return pool;
 }
 
-export const defaultCanvasPool = createCanvasPool();
+let internalCanvasPool = createCanvasPool();
 
-export const withCanvas = createWithResource(defaultCanvasPool);
+export async function configureCanvasPool(maxWorkers: number) {
+  await internalCanvasPool.clear();
+  internalCanvasPool = createCanvasPool(maxWorkers);
+}
+
+/**
+ * withCanvas passes canvas and smoothing options to the callback.
+ */
+export const withCanvas = createWithResource(internalCanvasPool, () => {
+  return {
+    ...CANVAS_RENDERING_CONTEXT_2D_SETTINGS,
+    ...CANVAS_IMAGE_SMOOTHING_SETTINGS
+  };
+});

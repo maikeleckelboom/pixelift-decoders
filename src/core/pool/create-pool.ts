@@ -1,5 +1,10 @@
 import { isServer } from '@/core/env.ts';
-import type { Pool } from '@/core/pool/types.ts';
+
+export interface Pool<T> {
+  acquire(): Promise<T>;
+  release(resource: T): Promise<void>;
+  clear(): Promise<void>;
+}
 
 export interface Waiter<T> {
   resolve: (res: T) => void;

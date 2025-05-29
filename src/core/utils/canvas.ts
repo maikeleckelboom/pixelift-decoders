@@ -1,19 +1,20 @@
 import type { ResizeOptions } from '@/types';
 
-/**
- * Sharp-style resize logic. Returns where to draw the image in the target canvas,
- * including the destination size (dw/dh) and offset (dx/dy).
- */
 export function calculateDrawRectSharpLike(
   srcWidth: number,
   srcHeight: number,
   { width: targetW, height: targetH, fit = 'cover' }: ResizeOptions
-): { dx: number; dy: number; dw: number; dh: number } {
+) {
   const srcAspect = srcWidth / srcHeight;
   const targetAspect = targetW / targetH;
 
-  let dw = targetW;
-  let dh = targetH;
+  let sx = 0,
+    sy = 0,
+    sw = srcWidth,
+    sh = srcHeight;
+
+  let dw = targetW,
+    dh = targetH;
 
   switch (fit) {
     case 'contain':
@@ -41,25 +42,42 @@ export function calculateDrawRectSharpLike(
         dw = srcWidth;
         dh = srcHeight;
       } else if (srcAspect > targetAspect) {
-        dh = targetH;
-        dw = Math.round(targetH * srcAspect);
-      } else {
+        // Crop width
+        sh = srcHeight;
+        sw = Math.round(sh * targetAspect);
+        sx = Math.round((srcWidth - sw) / 2);
+
         dw = targetW;
-        dh = Math.round(targetW / srcAspect);
+        dh = targetH;
+      } else {
+        // Crop height
+        sw = srcWidth;
+        sh = Math.round(sw / targetAspect);
+        sy = Math.round((srcHeight - sh) / 2);
+
+        dw = targetW;
+        dh = targetH;
       }
       break;
     }
 
     case 'fill':
     default: {
+      // Stretch to fill — no crop
+      sx = 0;
+      sy = 0;
+      sw = srcWidth;
+      sh = srcHeight;
+
       dw = targetW;
       dh = targetH;
       break;
     }
   }
 
+  // Center the image if it doesn't fill the entire target (contain / inside)
   const dx = Math.round((targetW - dw) / 2);
   const dy = Math.round((targetH - dh) / 2);
 
-  return { dx, dy, dw, dh };
+  return { sx, sy, sw, sh, dx, dy, dw, dh };
 }

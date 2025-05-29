@@ -1,5 +1,4 @@
-import { autoDispose, createPool } from '@/core/pool/create-pool.ts';
-import type { Pool } from '@/core/pool/types';
+import { autoDispose, createPool, type Pool } from '@/core/pool/create-pool.ts';
 import { createWithResource } from '@/core/pool/create-with-resource';
 import { getHardwareConcurrency } from '@/core/pool/concurrency';
 import type {
@@ -46,6 +45,11 @@ export function createDecodeWorker(): TypedWorker {
   };
 }
 
-const defaultWorkerPool = createWorkerPool();
+let internalWorkerPool = createWorkerPool();
 
-export const withWorker = createWithResource(defaultWorkerPool);
+export async function configureWorkerPool(maxWorkers: number) {
+  await internalWorkerPool.clear();
+  internalWorkerPool = createWorkerPool(maxWorkers);
+}
+
+export const withWorker = createWithResource(internalWorkerPool);

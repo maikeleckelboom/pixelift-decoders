@@ -38,8 +38,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
 
     ctx.clearRect(0, 0, targetWidth, targetHeight);
 
-    // === Sharp-style resizing logic ===
-    const { dx, dy, dw, dh } = calculateDrawRectSharpLike(
+    const { sx, sy, sw, sh, dx, dy, dw, dh } = calculateDrawRectSharpLike(
       imageBitmap.width,
       imageBitmap.height,
       {
@@ -49,7 +48,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       }
     );
 
-    ctx.drawImage(imageBitmap, dx, dy, dw, dh);
+    ctx.drawImage(imageBitmap, sx, sy, sw, sh, dx, dy, dw, dh);
 
     const imageData = ctx.getImageData(
       0,

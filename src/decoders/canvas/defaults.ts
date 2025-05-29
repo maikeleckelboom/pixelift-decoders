@@ -1,8 +1,3 @@
-export const CANVAS_RENDERING_CONTEXT_2D_SETTINGS: CanvasRenderingContext2DSettings = {
-  alpha: true,
-  willReadFrequently: true
-} as const;
-
 export const IMAGE_BITMAP_OPTIONS: ImageBitmapOptions = {
   imageOrientation: 'none',
   premultiplyAlpha: 'default'
@@ -10,4 +5,14 @@ export const IMAGE_BITMAP_OPTIONS: ImageBitmapOptions = {
 
 export const IMAGE_DATA_SETTINGS: ImageDataSettings = {
   colorSpace: 'srgb'
+} as const;
+
+export const CANVAS_IMAGE_SMOOTHING_SETTINGS: CanvasImageSmoothing = {
+  imageSmoothingEnabled: true,
+  imageSmoothingQuality: 'high'
+};
+
+export const CANVAS_RENDERING_CONTEXT_2D_SETTINGS: CanvasRenderingContext2DSettings = {
+  alpha: true,
+  willReadFrequently: true
 } as const;
