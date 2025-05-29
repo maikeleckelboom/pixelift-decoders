@@ -4,10 +4,6 @@ export interface PixelData {
   height: number;
 }
 
-export interface DecodeOptions {
-  signal?: AbortSignal;
-}
-
 export type BrowserInput =
   | string
   | ReadableStream
@@ -15,3 +11,11 @@ export type BrowserInput =
   | Uint8Array
   | SVGElement
   | ImageBitmapSource;
+
+export type FitMode = 'cover' | 'contain' | 'fill' | 'inside' | 'outside';
+
+export interface ResizeOptions {
+  width: number;
+  height: number;
+  fit?: FitMode | undefined;
+}

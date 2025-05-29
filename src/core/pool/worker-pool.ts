@@ -1,4 +1,4 @@
-import { autoDispose, createPool } from '@/core/pool/pool-factory';
+import { autoDispose, createPool } from '@/core/pool/create-pool.ts';
 import type { Pool } from '@/core/pool/types';
 import { createWithResource } from '@/core/pool/create-with-resource';
 import { getHardwareConcurrency } from '@/core/pool/concurrency';
@@ -12,10 +12,10 @@ const WORKER_SCRIPT_URL = new URL('./worker-script.worker', import.meta.url);
 
 export function createWorkerPool(
   maxWorkers: number | null = null,
-  timeoutMs = 5000
+  timeoutMs = 5_000
 ): Pool<TypedWorker> {
   const cores = getHardwareConcurrency(4);
-  maxWorkers = maxWorkers ?? Math.max(1, Math.min(cores, 16));
+  maxWorkers = maxWorkers ?? Math.max(1, Math.floor(cores / 2));
   const workers = Array.from({ length: maxWorkers }, createDecodeWorker);
   const pool = createPool(workers, timeoutMs, (worker) => worker.terminate());
   autoDispose(pool);

@@ -1,7 +1,10 @@
+import type { ResizeOptions } from '@/types';
+
 export interface WorkerRequest {
   id: string | number;
   task: 'process';
   data: Uint8Array;
+  resize?: ResizeOptions | undefined;
 }
 
 export interface WorkerSuccessResponse {
@@ -14,6 +17,7 @@ export interface WorkerSuccessResponse {
 
 export interface WorkerErrorResponse {
   id: string | number;
+  task: 'error';
   error: string;
 }
 

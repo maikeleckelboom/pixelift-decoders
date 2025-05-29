@@ -1,4 +1,3 @@
-import type { TypedWorker, WorkerResponse } from '@/core/pool/worker-pool.ts';
 import type { BrowserInput } from './types';
 
 function getTransferList(input: BrowserInput): Transferable[] {
@@ -26,7 +25,7 @@ function getTransferList(input: BrowserInput): Transferable[] {
   return [];
 }
 
-function normalizeInputToUint8Array(input: BrowserInput): Uint8Array {
+export function normalizeInputToUint8Array(input: BrowserInput): Uint8Array {
   if (typeof input === 'string') {
     return new TextEncoder().encode(input);
   }
@@ -43,28 +42,4 @@ function normalizeInputToUint8Array(input: BrowserInput): Uint8Array {
     return new Uint8Array(input.data.buffer);
   }
   throw new Error('Unsupported input type for worker');
-}
-
-export async function processWithWorker(
-  worker: TypedWorker,
-  input: BrowserInput
-): Promise<WorkerResponse['result']> {
-  return new Promise((resolve, reject) => {
-    worker.onmessage = (event) => {
-      if (event.data.task === 'process') {
-        resolve(event.data.result);
-      } else {
-        reject(new Error('Unexpected worker response'));
-      }
-    };
-
-    worker.worker.onerror = (event) => {
-      reject(new Error(event.message || 'Worker error'));
-    };
-
-    const normalizedInput = normalizeInputToUint8Array(input);
-    const transfer = getTransferList(normalizedInput);
-
-    worker.postMessage({ task: 'process', data: normalizedInput }, transfer);
-  });
 }

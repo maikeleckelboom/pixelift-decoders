@@ -1,5 +1,11 @@
 import { isServer } from '@/core/env.ts';
-import type { Pool, Waiter } from '@/core/pool/types.ts';
+import type { Pool } from '@/core/pool/types.ts';
+
+export interface Waiter<T> {
+  resolve: (res: T) => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
 
 export function createPool<T>(
   resources: T[],
