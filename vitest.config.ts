@@ -19,7 +19,7 @@ export default defineConfig({
         test: {
           globals: true,
           name: 'browser',
-          include: ['test/**/*.browser.ts', 'test/**/*.universal.ts'],
+          include: ['test/**/*.browser.test.ts', 'test/**/*.universal.test.ts'],
           benchmark: {
             include: ['test/**/*.browser.bench.ts']
           },
@@ -42,7 +42,7 @@ export default defineConfig({
         test: {
           globals: true,
           name: 'server',
-          include: ['test/**/*.server.ts', 'test/**/*.universal.ts'],
+          include: ['test/**/*.server.test.ts', 'test/**/*.universal.test.ts'],
           environment: 'node',
           benchmark: {
             include: ['test/**/*.server.bench.ts']

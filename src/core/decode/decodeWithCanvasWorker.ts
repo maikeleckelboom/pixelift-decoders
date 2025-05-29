@@ -5,7 +5,7 @@ import type {
   WorkerErrorResponse,
   WorkerSuccessResponse
 } from '@/core/pool/worker-types.ts';
-import type { ResizeOptions } from '@/types';
+import type { PixelData, ResizeOptions } from '@/types';
 
 let currentId = 0;
 function nextId(): number {
@@ -46,7 +46,7 @@ export function setupWorker(worker: TypedWorker) {
   };
 }
 
-export async function decodeWithCanvasWorker(
+export async function decodeUsingCanvasWorker(
   worker: TypedWorker,
   data: Uint8Array,
   resize?: ResizeOptions
@@ -61,4 +61,32 @@ export async function decodeWithCanvasWorker(
 
     worker.postMessage(message, transfer);
   });
+}
+
+export async function decodeWithCanvasWorker(
+  source: ImageBitmapSource,
+  options?: {
+    resize?: ResizeOptions;
+  }
+): Promise<PixelData> {
+  if (typeof OffscreenCanvas === 'undefined') {
+    throw new Error('OffscreenCanvas is not supported in this environment');
+  }
+
+  const worker = new Worker(new URL('./decode.worker.ts', import.meta.url), {
+    type: 'module'
+  });
+
+  setupWorker(worker);
+
+  try {
+    const data = await decodeUsingCanvasWorker(worker, source, options?.resize);
+    return {
+      width: source.width,
+      height: source.height,
+      data
+    };
+  } finally {
+    worker.terminate();
+  }
 }

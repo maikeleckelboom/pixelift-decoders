@@ -9,7 +9,7 @@ export class DecodeError extends Error {
   }
 }
 
-// --- Adapter Strategy Interface (generic input-aware)
+// --- Adapter Strategy Interface (generic blob-aware)
 interface InputAdapterStrategy<
   T extends SharpInput | ReadableStream | Blob = SharpInput | ReadableStream | Blob
 > {

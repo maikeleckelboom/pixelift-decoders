@@ -13,7 +13,7 @@ export function createWorkerPool(
   maxWorkers: number | null = null,
   timeoutMs = 5_000
 ): Pool<TypedWorker> {
-  const cores = getHardwareConcurrency(4);
+  const cores = getHardwareConcurrency();
   maxWorkers = maxWorkers ?? Math.max(1, Math.floor(cores / 2));
   const workers = Array.from({ length: maxWorkers }, createDecodeWorker);
   const pool = createPool(workers, timeoutMs, (worker) => worker.terminate());

@@ -1,10 +1,16 @@
-import type { FitMode, PixelData, ResizeOptions } from '@/types';
-import { decodeWithCanvas } from '@/core/decode/decodeWithCanvas.ts';
+import type { BrowserInput, PixelData, ResizeOptions } from '@/types';
 import { decodeWithCanvasWorker } from '@/core/decode/decodeWithCanvasWorker.ts';
-import { withWorker } from '@/core/pool/worker-pool.ts';
-import type { TypedWorker } from '@/core/pool/worker-types.ts';
+import { decodeWithCanvas } from '@/core/decode/decodeWithCanvas.ts';
+
 interface DecodeOptions {
-  resize?: ResizeOptions;
-  signal?: AbortSignal;
   preferWorker?: boolean;
+  resize?: ResizeOptions;
+}
+
+export async function decode(
+  input: BrowserInput,
+  options?: DecodeOptions
+): Promise<PixelData> {
+  console.log('Pixelift: Decoding input with options:', options);
+  return decodeWithCanvas(input, options);
 }

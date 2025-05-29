@@ -41,5 +41,5 @@ export function normalizeInputToUint8Array(input: BrowserInput): Uint8Array {
   if (input instanceof ImageData) {
     return new Uint8Array(input.data.buffer);
   }
-  throw new Error('Unsupported input type for worker');
+  throw new Error('Unsupported blob type for worker');
 }

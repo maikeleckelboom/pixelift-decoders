@@ -7,7 +7,7 @@ import {
 } from '@/decoders/canvas/defaults.ts';
 
 export function createCanvasPool(maxCanvases: number | null = null): Pool<OffscreenCanvas> {
-  const cores = getHardwareConcurrency(4);
+  const cores = getHardwareConcurrency();
   maxCanvases ??= Math.max(1, Math.floor(cores / 2));
   const canvases = Array.from({ length: maxCanvases }, () => new OffscreenCanvas(1, 1));
   const pool = createPool(canvases);

@@ -47,5 +47,5 @@ export async function normalizeBrowserInput(
     return input;
   }
 
-  throw new Error('Unsupported input type for image decoding');
+  throw new Error('Unsupported blob type for image decoding');
 }
