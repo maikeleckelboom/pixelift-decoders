@@ -1,6 +1,6 @@
 import { listBrowserSupportedExtensions } from '@test/fixtures/assets';
 import { decode } from '@/core/decode/decode';
-import { beforeAll, describe, expect, it, test } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 const ASSET_LOADING_TIMEOUT = 30000;
 const DECODE_TEST_TIMEOUT = 10000;
@@ -12,7 +12,7 @@ interface TestAsset {
   ext: string;
 }
 
-describe('decode in browser environment', () => {
+describe('Image Decoding in Browser', () => {
   const extensions = listBrowserSupportedExtensions();
   let assets: TestAsset[] = [];
 
@@ -45,7 +45,7 @@ describe('decode in browser environment', () => {
     assets = results.filter((asset): asset is TestAsset => asset !== null);
   }, ASSET_LOADING_TIMEOUT);
 
-  it('should load at least one supported asset', () => {
+  it('should have at least one supported image format available for decoding', () => {
     if (extensions.length === 0) {
       console.warn('[decode.test] Skipping asset check — no extensions found');
       return;
@@ -53,67 +53,63 @@ describe('decode in browser environment', () => {
     expect(assets.length).toBeGreaterThan(0);
   });
 
-  describe(
-    'canvas-based decoding',
-    () => {
-      for (const ext of extensions) {
-        test(
-          `decodes pixelift.${ext} using canvas`,
-          async () => {
-            const asset = assets.find((a) => a.ext === ext);
-            if (!asset) {
-              return;
+  extensions.forEach((ext) => {
+    const FORMAT = ext.toUpperCase();
+
+    describe(`${FORMAT} Decoding`, () => {
+      it(
+        `should decode ${FORMAT} image successfully using worker thread`,
+        async () => {
+          const asset = assets.find((a) => a.ext === ext);
+          if (!asset) {
+            console.warn(`[decode.test] No asset found for ${ext}. Skipping test.`);
+            return;
+          }
+
+          const pixelData = await decode(asset.blob, {
+            preferWorker: true,
+            resize: {
+              width: 50,
+              height: 50
             }
+          });
 
-            console.info(`[decode.test] Decoding ${asset.name} via Web Worker 👷️`);
+          const { data, width, height } = pixelData;
 
-            const pixelData = await decode(asset.blob, {
-              preferWorker: true,
-              resize: {
-                width: 50,
-                height: 50
-              }
-            });
+          expect(width).toBe(50);
+          expect(height).toBe(50);
+          expect(data).toBeInstanceOf(Uint8ClampedArray);
+          expect(data.length).toBe(width * height * 4);
+        },
+        DECODE_TEST_TIMEOUT
+      );
 
-            const { data, width, height } = pixelData;
+      it(
+        `should decode ${FORMAT} image successfully using main thread`,
+        async () => {
+          const asset = assets.find((a) => a.ext === ext);
+          if (!asset) {
+            console.warn(`[decode.test] No asset found for ${ext}. Skipping test.`);
+            return;
+          }
 
-            expect(width).toBe(50);
-            expect(height).toBe(50);
-            expect(data).toBeInstanceOf(Uint8ClampedArray);
-            expect(data.length).toBe(width * height * 4);
-          },
-          DECODE_TEST_TIMEOUT
-        );
-
-        test(
-          `decodes pixelift.${ext} using canvas`,
-          async () => {
-            const asset = assets.find((a) => a.ext === ext);
-            if (!asset) {
-              return;
+          const pixelData = await decode(asset.blob, {
+            preferWorker: false,
+            resize: {
+              width: 50,
+              height: 50
             }
+          });
 
-            console.info(`[decode.test] Decoding ${asset.name} on main thread 🧵`);
+          const { data, width, height } = pixelData;
 
-            const pixelData = await decode(asset.blob, {
-              preferWorker: false,
-              resize: {
-                width: 50,
-                height: 50
-              }
-            });
-
-            const { data, width, height } = pixelData;
-
-            expect(width).toBe(50);
-            expect(height).toBe(50);
-            expect(data).toBeInstanceOf(Uint8ClampedArray);
-            expect(data.length).toBe(width * height * 4);
-          },
-          DECODE_TEST_TIMEOUT
-        );
-      }
-    },
-    ASSET_LOADING_TIMEOUT
-  );
+          expect(width).toBe(50);
+          expect(height).toBe(50);
+          expect(data).toBeInstanceOf(Uint8ClampedArray);
+          expect(data.length).toBe(width * height * 4);
+        },
+        DECODE_TEST_TIMEOUT
+      );
+    });
+  });
 });

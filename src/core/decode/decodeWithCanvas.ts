@@ -22,9 +22,7 @@ import { calculateDrawRectSharpLike } from '@/core/utils/canvas.ts';
  */
 export async function decodeWithCanvas(
   source: ImageBitmapSource,
-  options?: {
-    resize?: ResizeOptions;
-  }
+  options?: { resize?: ResizeOptions }
 ): Promise<PixelData> {
   return withCanvas(async (canvas, settings) => {
     const context = canvas.getContext('2d', settings);
@@ -33,40 +31,48 @@ export async function decodeWithCanvas(
     context.imageSmoothingEnabled = settings.imageSmoothingEnabled;
     context.imageSmoothingQuality = settings.imageSmoothingQuality;
 
-    const imageBitmap = await createImageBitmap(source);
-
-    const targetWidth = options?.resize?.width ?? imageBitmap.width;
-    const targetHeight = options?.resize?.height ?? imageBitmap.height;
-
-    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
+    let imageBitmap: ImageBitmap;
+    try {
+      imageBitmap = await createImageBitmap(source);
+    } catch (e) {
+      console.error('createImageBitmap failed:', e);
+      throw e;
     }
 
-    context.clearRect(0, 0, canvas.width, canvas.height);
+    try {
+      const targetWidth = options?.resize?.width ?? imageBitmap.width;
+      const targetHeight = options?.resize?.height ?? imageBitmap.height;
 
-    const { sx, sy, sw, sh, dx, dy, dw, dh } = calculateDrawRectSharpLike(
-      imageBitmap.width,
-      imageBitmap.height,
-      {
-        width: targetWidth,
-        height: targetHeight,
-        fit: options?.resize?.fit
+      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
       }
-    );
 
-    context.drawImage(imageBitmap, sx, sy, sw, sh, dx, dy, dw, dh);
+      context.clearRect(0, 0, canvas.width, canvas.height);
 
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      const { sx, sy, sw, sh, dx, dy, dw, dh } = calculateDrawRectSharpLike(
+        imageBitmap.width,
+        imageBitmap.height,
+        {
+          width: targetWidth,
+          height: targetHeight,
+          fit: options?.resize?.fit
+        }
+      );
 
-    return {
-      data: new Uint8ClampedArray(
-        imageData.data.buffer,
-        imageData.data.byteOffset,
-        imageData.data.byteLength
-      ),
-      width: canvas.width,
-      height: canvas.height
-    };
+      context.drawImage(imageBitmap, sx, sy, sw, sh, dx, dy, dw, dh);
+
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+
+      const result = {
+        data: imageData.data,
+        width: imageData.width,
+        height: imageData.height
+      };
+
+      return result;
+    } finally {
+      imageBitmap.close();
+    }
   });
 }

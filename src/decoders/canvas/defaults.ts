@@ -18,10 +18,3 @@ export const CANVAS_RENDERING_CONTEXT_2D_SETTINGS: CanvasRenderingContext2DSetti
 } as const;
 
 export type CanvasDefaultSettings = CanvasRenderingContext2DSettings & CanvasImageSmoothing;
-
-export function getCanvasDefaultSettings(): CanvasDefaultSettings {
-  return {
-    ...CANVAS_RENDERING_CONTEXT_2D_SETTINGS,
-    ...CANVAS_IMAGE_SMOOTHING_SETTINGS
-  };
-}

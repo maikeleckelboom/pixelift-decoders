@@ -2,7 +2,7 @@ import type { ResizeOptions } from '@/types';
 import type { CanvasDefaultSettings } from '@/decoders/canvas/defaults.ts';
 
 export interface WorkerTask {
-  id: number;
+  id: string;
   type: 'decode';
   data: Uint8Array;
   resize?: ResizeOptions | undefined;
@@ -10,7 +10,7 @@ export interface WorkerTask {
 }
 
 export interface WorkerSuccessResponse {
-  id: number;
+  id: string;
   type: 'success';
   width: number;
   height: number;
@@ -18,7 +18,7 @@ export interface WorkerSuccessResponse {
 }
 
 export interface WorkerErrorResponse {
-  id: number;
+  id: string;
   type: 'error';
   error: {
     message: string;

@@ -14,7 +14,7 @@ export interface Waiter<T> {
 
 export function createPool<T>(
   resources: T[],
-  timeoutMs = 5_000,
+  timeoutMs = 15_000,
   dispose?: (resource: T) => void | Promise<void>
 ): Pool<T> {
   const available: T[] = [...resources];
@@ -24,9 +24,7 @@ export function createPool<T>(
   let disposed = false;
 
   async function safeDispose(resource: T): Promise<void> {
-    if (!dispose) {
-      return;
-    }
+    if (!dispose) return;
     try {
       await dispose(resource);
     } catch (err) {
@@ -43,121 +41,108 @@ export function createPool<T>(
     }
 
     if (available.length > 0) {
-      const resource = available.pop();
-      if (resource !== undefined) {
-        allocated.add(resource);
-        return Promise.resolve(resource);
-      }
-      return Promise.reject(
-        new Error('Internal pool error: Expected resource not found in available list')
-      );
+      const resource = available.pop()!;
+      allocated.add(resource);
+      return Promise.resolve(resource);
     }
 
     return new Promise<T>((resolve, reject) => {
-      let waiterReference: Waiter<T> | null = null;
-
       const timer = setTimeout(() => {
-        const index = waiterReference ? waiting.indexOf(waiterReference) : -1;
+        const index = waiting.findIndex((w) => w.reject === reject);
         if (index !== -1) {
           waiting.splice(index, 1);
           reject(new Error('Pool acquire timeout'));
         }
       }, timeoutMs);
 
-      waiterReference = { resolve, reject, timer };
-      waiting.push(waiterReference);
+      waiting.push({ resolve, reject, timer });
     });
   }
 
   async function release(resource: T): Promise<void> {
-    if (!allocated.has(resource)) {
-      if (disposed) {
-        await safeDispose(resource);
-        return;
-      }
+    if (disposed) {
+      await safeDispose(resource);
+      return;
+    }
 
+    if (!allocated.has(resource)) {
       throw new Error('Pool release of unknown or already released resource');
     }
 
     allocated.delete(resource);
 
+    // Re-check disposed state after synchronous operations
     if (disposed) {
       await safeDispose(resource);
       return;
     }
 
     if (waiting.length > 0) {
-      const waiter = waiting.shift();
-      if (waiter) {
-        clearTimeout(waiter.timer);
-        allocated.add(resource);
-        waiter.resolve(resource);
-      } else {
-        available.push(resource);
-      }
-    }
-  }
-
-  async function clear(): Promise<void> {
-    if (disposed) {
+      const waiter = waiting.shift()!;
+      clearTimeout(waiter.timer);
+      allocated.add(resource);
+      waiter.resolve(resource);
       return;
     }
 
+    available.push(resource);
+  }
+
+  async function clear(): Promise<void> {
+    if (disposed) return;
     disposed = true;
 
-    const currentWaiting = [...waiting];
-
+    // Clear waiters first
+    const currentWaiters = [...waiting];
     waiting.length = 0;
-
-    for (const waiter of currentWaiting) {
+    currentWaiters.forEach((waiter) => {
       clearTimeout(waiter.timer);
       waiter.reject(new Error('Pool cleared'));
+    });
+
+    // Dispose available resources
+    const disposePromises: Promise<void>[] = [];
+    while (available.length > 0) {
+      const resource = available.pop()!;
+      disposePromises.push(safeDispose(resource));
     }
 
-    const disposalPromises: Promise<void>[] = [];
-
-    for (const resource of available) {
-      disposalPromises.push(safeDispose(resource));
-    }
-
-    available.length = 0;
-
-    for (const resource of Array.from(allocated)) {
-      disposalPromises.push(safeDispose(resource));
-    }
-
+    // Dispose allocated resources
+    const allocatedResources = [...allocated];
     allocated.clear();
+    allocatedResources.forEach((resource) => {
+      disposePromises.push(safeDispose(resource));
+    });
 
-    await Promise.all(disposalPromises);
+    await Promise.all(disposePromises);
   }
 
   return { acquire, release, clear };
 }
 
-export function autoDisposeOnExit<T>(pool: ReturnType<typeof createPool<T>>) {
+export function autoDisposeOnExit<T>(pool: Pool<T>) {
   if (typeof process !== 'undefined' && process.on) {
-    const dispose = () => pool.clear();
-    process.on('exit', dispose);
-    process.on('SIGINT', () => {
-      dispose();
-      process.exit();
-    });
-    process.on('SIGTERM', () => {
-      dispose();
-      process.exit();
-    });
+    const cleanup = async () => {
+      await pool.clear();
+    };
+
+    const shutdown = async (signal: string) => {
+      await cleanup();
+      process.exit(signal === 'SIGINT' ? 130 : 143);
+    };
+
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
   }
 }
 
-export function autoDisposeOnUnload<T>(pool: ReturnType<typeof createPool<T>>) {
+export function autoDisposeOnUnload<T>(pool: Pool<T>) {
   if (typeof window !== 'undefined') {
-    window.addEventListener('unload', () => {
-      pool.clear();
-    });
+    window.addEventListener('beforeunload', pool.clear);
   }
 }
 
-export function autoDispose<T>(pool: ReturnType<typeof createPool<T>>): void {
+export function autoDispose<T>(pool: Pool<T>): void {
   if (isServer()) {
     autoDisposeOnExit(pool);
   } else {

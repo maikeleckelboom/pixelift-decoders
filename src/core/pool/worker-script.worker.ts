@@ -7,7 +7,7 @@ import { calculateDrawRectSharpLike } from '@/core/utils/canvas.ts';
 import { PixeliftWorkerError } from '@/core/error.ts';
 
 // Worker state: reuse single OffscreenCanvas and context to reduce overhead
-let offscreenCanvas: OffscreenCanvas | null = null;
+let canvas: OffscreenCanvas | null = null;
 let context: OffscreenCanvasRenderingContext2D | null = null;
 
 /**
@@ -17,32 +17,23 @@ function ensureCanvasAndContext(
   width: number,
   height: number
 ): OffscreenCanvasRenderingContext2D {
-  if (
-    !offscreenCanvas ||
-    offscreenCanvas.width !== width ||
-    offscreenCanvas.height !== height
-  ) {
-    offscreenCanvas = new OffscreenCanvas(width, height);
-    context = offscreenCanvas.getContext('2d', {
-      willReadFrequently: true,
-      alpha: true
-    } as CanvasRenderingContext2DSettings);
-    if (!context) {
-      throw new PixeliftWorkerError(
-        'Failed to get 2D context from OffscreenCanvas in worker.'
-      );
-    }
-  } else if (!context) {
-    context = offscreenCanvas.getContext('2d');
-    if (!context) {
-      throw new PixeliftWorkerError(
-        'Failed to re-acquire 2D context from OffscreenCanvas in worker.'
-      );
-    }
+  // Reuse canvas if dimensions match
+  if (canvas && canvas.width === width && canvas.height === height && context) {
+    return context;
   }
-  // Make sure canvas size is updated (important if dimensions changed)
-  if (offscreenCanvas.width !== width) offscreenCanvas.width = width;
-  if (offscreenCanvas.height !== height) offscreenCanvas.height = height;
+
+  // Create new canvas if needed
+  canvas = new OffscreenCanvas(width, height);
+  context = canvas.getContext('2d', {
+    willReadFrequently: true,
+    alpha: true
+  } as CanvasRenderingContext2DSettings);
+
+  if (!context) {
+    throw new PixeliftWorkerError(
+      'Failed to get 2D context from OffscreenCanvas in worker.'
+    );
+  }
 
   return context;
 }
@@ -58,26 +49,40 @@ async function processImage(
   let imageBitmap: ImageBitmap | null = null;
 
   try {
-    console.log('[worker] About to call createImageBitmap on blob');
-
-    imageBitmap = await createImageBitmap(blob, {
-      resizeWidth: resizeOptions?.width ?? 0,
-      resizeHeight: resizeOptions?.height ?? 0
-    });
+    // Create image bitmap from blob
+    imageBitmap = await createImageBitmap(blob);
 
     const targetWidth = resizeOptions?.width ?? imageBitmap.width;
     const targetHeight = resizeOptions?.height ?? imageBitmap.height;
 
-    const ctx = ensureCanvasAndContext(imageBitmap.width, imageBitmap.height);
+    // Skip canvas operations if no resize needed and original dimensions match
+    if (
+      !resizeOptions &&
+      targetWidth === imageBitmap.width &&
+      targetHeight === imageBitmap.height
+    ) {
+      const canvas = new OffscreenCanvas(targetWidth, targetHeight);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Could not get 2D context');
+
+      ctx.drawImage(imageBitmap, 0, 0);
+      const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+
+      return {
+        data: imageData.data,
+        width: imageData.width,
+        height: imageData.height
+      };
+    }
+
+    const ctx = ensureCanvasAndContext(targetWidth, targetHeight);
     ctx.clearRect(0, 0, targetWidth, targetHeight);
 
-    const drawRect = calculateDrawRectSharpLike(targetWidth, targetHeight, {
+    const drawRect = calculateDrawRectSharpLike(imageBitmap.width, imageBitmap.height, {
       width: targetWidth,
       height: targetHeight,
       fit: resizeOptions?.fit
     });
-
-    console.log('drawRect', drawRect);
 
     ctx.drawImage(
       imageBitmap,
@@ -99,6 +104,7 @@ async function processImage(
       height: outputImageData.height
     };
   } finally {
+    // Always close ImageBitmap to prevent memory leaks
     imageBitmap?.close();
   }
 }
@@ -131,6 +137,8 @@ self.onmessage = async (event: MessageEvent<WorkerTask>) => {
       height: result.height,
       result: result.data
     };
+
+    // Transfer pixel data buffer directly (zero-copy)
     self.postMessage(response, [result.data.buffer]);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -144,20 +152,37 @@ self.onmessage = async (event: MessageEvent<WorkerTask>) => {
     self.postMessage(errorResponse);
   }
 };
+// ... existing imports ...
 
 /**
  * Global error handler for the worker.
+ * Handles both Event-based errors and legacy string-based errors.
  */
-self.onerror = (_e) => {
+self.onerror = function (e: string | Event) {
+  let errorMessage = 'An unknown error occurred in the worker';
+  let errorStack = 'No stack trace available';
+
+  if (typeof e === 'string') {
+    errorMessage = e;
+  } else if (e instanceof ErrorEvent) {
+    if (e.preventDefault) e.preventDefault();
+    errorMessage = e.message || errorMessage;
+    errorStack = e.error?.stack ?? errorStack;
+  } else if (e instanceof Event) {
+    if (e.preventDefault) e.preventDefault();
+    errorMessage = 'Unhandled event error';
+  }
+
   const errorResponse: WorkerErrorResponse = {
-    id: Math.random() * 1e9,
+    id: crypto.randomUUID(),
     type: 'error',
     error: {
       name: 'WorkerError',
-      message: 'An unknown error occurred in the worker.',
-      stack: 'No stack trace available'
+      message: errorMessage,
+      stack: errorStack
     }
   };
+
   self.postMessage(errorResponse);
-  return false;
+  return true;
 };

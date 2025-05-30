@@ -39,19 +39,15 @@ export async function decodeWithCanvasWorker(
 
   try {
     const task: WorkerTask = {
-      id: Array.from(crypto.randomUUID()).reduce(
-        (hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) | 0,
-        0
-      ),
+      id: crypto.randomUUID(),
       type: DECODE_TASK_NAME,
       data: data.buffer,
       resize: options?.resize
     };
 
-    const result = await workerPool.executeTask<WorkerSuccessResponse>(
-      task,
-      getTransferList(data)
-    );
+    const transferList = getTransferList(data.buffer);
+
+    const result = await workerPool.executeTask<WorkerSuccessResponse>(task, transferList);
 
     validateWorkerResponse(result);
 

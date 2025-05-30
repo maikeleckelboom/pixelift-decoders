@@ -15,14 +15,14 @@ export async function decode(
   options?: DecodeOptions
 ): Promise<PixelData> {
   if (options?.preferWorker && isWorkerSupported()) {
-    console.log('👷️ Using worker for canvas decode');
+    // console.log('👷️ Using worker for canvas decode');
     try {
       return await decodeWithCanvasWorker(input, options);
     } catch (e) {
       console.warn('Worker decode failed, failing back to canvas:', e);
     }
   } else {
-    console.log('🧵 Using main thread for canvas decode');
+    // console.log('🧵 Using main thread for canvas decode');
   }
 
   return await decodeWithCanvas(input, options);

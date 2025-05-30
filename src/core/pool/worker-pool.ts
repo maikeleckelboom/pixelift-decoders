@@ -6,9 +6,11 @@ import type {
 } from './worker-types';
 import { autoDispose, createPool } from './create-pool';
 import { PixeliftWorkerError } from '../error';
+import { getHardwareConcurrency } from '@/core/pool/concurrency.ts';
 
 const WORKER_SCRIPT_URL = new URL('./worker-script.worker.ts', import.meta.url);
-const DEFAULT_TIMEOUT = 5_000;
+
+const DEFAULT_TIMEOUT = 15_000;
 
 export interface WorkerHandle {
   postTask<T = unknown>(task: WorkerTask, transferables?: Transferable[]): Promise<T>;
@@ -19,7 +21,7 @@ export interface WorkerHandle {
 export class ManagedWorker implements WorkerHandle {
   private worker: Worker;
   private pending = new Map<
-    number,
+    string,
     {
       resolve: (value: any) => void;
       reject: (reason?: any) => void;
@@ -90,7 +92,7 @@ export class ManagedWorker implements WorkerHandle {
     const errorMessage = event.message || 'Worker encountered an unhandled error';
     const errorCause = event.error ?? new Error(errorMessage);
     const error = new PixeliftWorkerError(errorMessage, { cause: errorCause });
-
+    console.error('Worker error:', error);
     for (const { reject } of this.pending.values()) {
       reject(error);
     }
@@ -102,14 +104,7 @@ export const workerPool = {
   pool: createPool<WorkerHandle>(
     Array.from(
       {
-        length: Math.max(
-          1,
-          Math.floor(
-            (typeof navigator !== 'undefined' && navigator.hardwareConcurrency
-              ? navigator.hardwareConcurrency
-              : 2) / 2
-          )
-        )
+        length: 20
       },
       () => new ManagedWorker()
     ),
@@ -129,15 +124,19 @@ export const workerPool = {
     }
   },
 
-  async reconfigure(concurrency: number) {
+  async reconfigure(concurrency: number = 4) {
     await this.pool.clear();
-    const newConcurrency = Math.max(1, concurrency);
     this.pool = createPool<WorkerHandle>(
-      Array.from({ length: newConcurrency }, () => new ManagedWorker()),
+      Array.from({ length: concurrency }, () => new ManagedWorker()),
       DEFAULT_TIMEOUT,
       (worker) => worker.terminate()
     );
-    autoDispose(this.pool);
+    console.info(`Worker pool reconfigured to ${concurrency} workers`);
+  },
+
+  async adjustPool() {
+    // const cores = getHardwareConcurrency();
+    // await this.reconfigure(cores - 1);
   }
 };
 

@@ -23,7 +23,7 @@ export default defineConfig({
           benchmark: {
             include: ['test/**/*.browser.bench.ts']
           },
-          environment: 'browser',
+          environment: 'happy-dom',
           browser: {
             provider: 'playwright',
             enabled: true,
