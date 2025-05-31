@@ -19,9 +19,13 @@ export default defineConfig({
         test: {
           globals: true,
           name: 'browser',
-          include: ['test/**/*.browser.test.ts', 'test/**/*.universal.test.ts'],
+          include: [
+            'test/**/*.browser.test.ts',
+            'test/**/*.universal.test.ts',
+            '**/*.test.ts'
+          ],
           benchmark: {
-            include: ['test/**/*.browser.bench.ts']
+            include: ['**/*.bench.ts']
           },
           environment: 'happy-dom',
           browser: {

@@ -16,5 +16,3 @@ export const CANVAS_RENDERING_CONTEXT_2D_SETTINGS: CanvasRenderingContext2DSetti
   alpha: true,
   willReadFrequently: true
 } as const;
-
-export type CanvasDefaultSettings = CanvasRenderingContext2DSettings & CanvasImageSmoothing;
