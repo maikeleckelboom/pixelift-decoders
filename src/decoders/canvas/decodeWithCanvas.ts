@@ -1,12 +1,12 @@
 import type { PixelData, ResizeOptions } from '@/types';
-import { calculateDrawRectSharpLike } from '@/core/utils/canvas.ts';
+import { calculateSharpResizeRect } from '@/core/fn/calculateSharpResizeRect.ts';
 import {
   CANVAS_IMAGE_SMOOTHING_SETTINGS,
   CANVAS_RENDERING_CONTEXT_2D_SETTINGS
 } from '@/decoders/canvas/defaults.ts';
 import { OffscreenCanvasPool } from '@/core/pool/OffscreenCanvasPool.ts';
 
-const canvasPool = new OffscreenCanvasPool(2048, 2048, 4);
+const canvasPool = new OffscreenCanvasPool(2048, 2048, 7);
 
 /**
  * Decode an ImageBitmapSource into pixel data, optionally resizing it.
@@ -51,7 +51,7 @@ export async function decodeWithCanvas(
         imageSmoothingQuality ?? CANVAS_IMAGE_SMOOTHING_SETTINGS.imageSmoothingQuality;
     }
 
-    const { sx, sy, sw, sh, dx, dy, dw, dh } = calculateDrawRectSharpLike(
+    const { sx, sy, sw, sh, dx, dy, dw, dh } = calculateSharpResizeRect(
       imageBitmap.width,
       imageBitmap.height,
       {

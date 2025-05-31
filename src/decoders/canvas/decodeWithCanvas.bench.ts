@@ -1,4 +1,3 @@
-// bench/decodeWithCanvas.bench.ts
 import { bench } from 'vitest';
 import { decodeWithCanvas } from '@/decoders/canvas/decodeWithCanvas';
 
@@ -18,6 +17,26 @@ bench(
   'decode 128x128 image with canvas',
   async () => {
     await decodeWithCanvas(imageBlob);
+  },
+  {
+    time: 5_000
+  }
+);
+
+bench(
+  'decode 128x128 image with canvas and resize to 64x64',
+  async () => {
+    await decodeWithCanvas(imageBlob, { resize: { width: 64, height: 64 } });
+  },
+  {
+    time: 5_000
+  }
+);
+
+bench(
+  'decode 128x128 image with canvas and resize to 16x16',
+  async () => {
+    await decodeWithCanvas(imageBlob, { resize: { width: 16, height: 16 } });
   },
   {
     time: 5_000
