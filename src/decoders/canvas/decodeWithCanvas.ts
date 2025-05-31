@@ -6,7 +6,11 @@ import {
 } from '@/decoders/canvas/defaults.ts';
 import { OffscreenCanvasPool, type Pool } from '@/core/pool/OffscreenCanvasPool.ts';
 
-const canvasPool = new OffscreenCanvasPool(2048, 2048, navigator.hardwareConcurrency);
+const canvasPool = new OffscreenCanvasPool(
+  2048,
+  2048,
+  Math.max(1, navigator.hardwareConcurrency - 1)
+);
 
 export interface DecodeWithCanvasOptions {
   signal?: AbortSignal;
@@ -41,8 +45,6 @@ export async function decodeWithCanvas(
 
     const ctx = canvas.getContext('2d', CANVAS_RENDERING_CONTEXT_2D_SETTINGS);
     if (!ctx) throw new Error('Canvas 2D context not available');
-
-    ctx.clearRect(0, 0, targetWidth, targetHeight);
 
     if (
       resize &&

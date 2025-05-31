@@ -1,80 +1,95 @@
-type CanvasTask = {
-  resolve: (canvas: OffscreenCanvas) => void;
-  reject: (err: Error) => void;
-  signal?: AbortSignal | undefined;
-};
-
 export interface Pool {
   acquire(signal?: AbortSignal): Promise<OffscreenCanvas>;
   release(canvas: OffscreenCanvas): void;
   dispose(): void;
 }
 
+export type CanvasPoolTask = {
+  resolve: (canvas: OffscreenCanvas) => void;
+  reject: (err: Error) => void;
+  signal?: AbortSignal | undefined;
+};
+
+export const PoolErrors = {
+  INVALID_MAX_SIZE: 'maxSize must be a positive number.',
+  INVALID_DIMENSIONS: 'Canvas width and height must be positive numbers.',
+  RELEASE_UNACQUIRED: 'Cannot release a canvas that is not acquired.',
+  POOL_DISPOSED: 'Canvas pool disposed before task could run.',
+  OPERATION_ABORTED: new DOMException('Operation aborted', 'AbortError')
+};
+
 export class OffscreenCanvasPool implements Pool {
   private pool: OffscreenCanvas[] = [];
   private inUse = new Set<OffscreenCanvas>();
-  private waitQueue: CanvasTask[] = [];
+  private waitQueue: CanvasPoolTask[] = [];
 
   constructor(
     private readonly width: number,
     private readonly height: number,
     private readonly maxSize: number = 4
   ) {
-    if (maxSize <= 0) {
-      throw new Error('maxSize must be a positive number.');
-    }
-    if (width <= 0 || height <= 0) {
-      throw new Error('Canvas width and height must be positive numbers.');
-    }
+    if (maxSize <= 0) throw new Error(PoolErrors.INVALID_MAX_SIZE);
+    if (width <= 0 || height <= 0) throw new Error(PoolErrors.INVALID_DIMENSIONS);
   }
 
   acquire(signal?: AbortSignal): Promise<OffscreenCanvas> {
     if (signal?.aborted) {
-      return Promise.reject(new DOMException('Operation aborted', 'AbortError'));
+      return Promise.reject(PoolErrors.OPERATION_ABORTED);
     }
 
-    const canvas = this.pool.find((c) => !this.inUse.has(c));
-    if (canvas) {
+    const available = this.pool.find((canvas) => !this.inUse.has(canvas));
+    if (available) {
+      this.inUse.add(available);
+      return Promise.resolve(available);
+    }
+
+    if (this.pool.length < this.maxSize) {
+      const canvas = new OffscreenCanvas(this.width, this.height);
+      this.pool.push(canvas);
       this.inUse.add(canvas);
       return Promise.resolve(canvas);
     }
 
-    if (this.pool.length < this.maxSize) {
-      const newCanvas = new OffscreenCanvas(this.width, this.height);
-      this.pool.push(newCanvas);
-      this.inUse.add(newCanvas);
-      return Promise.resolve(newCanvas);
-    }
-
     return new Promise((resolve, reject) => {
-      const task: CanvasTask = { resolve, reject, signal };
+      const task: CanvasPoolTask = { resolve, reject, signal };
+
+      const onAbort = () => {
+        const idx = this.waitQueue.indexOf(task);
+        if (idx !== -1) {
+          this.waitQueue.splice(idx, 1);
+          reject(PoolErrors.OPERATION_ABORTED);
+        }
+      };
+
+      signal?.addEventListener('abort', onAbort, { once: true });
+
       this.waitQueue.push(task);
 
-      signal?.addEventListener(
-        'abort',
-        () => {
-          const index = this.waitQueue.indexOf(task);
-          if (index !== -1) {
-            this.waitQueue.splice(index, 1);
-            reject(new DOMException('Operation aborted', 'AbortError'));
-          }
-        },
-        { once: true }
-      );
+      const cleanup = () => signal?.removeEventListener('abort', onAbort);
+
+      task.resolve = (canvas) => {
+        cleanup();
+        resolve(canvas);
+      };
+
+      task.reject = (error) => {
+        cleanup();
+        reject(error);
+      };
     });
   }
 
   release(canvas: OffscreenCanvas): void {
     if (!this.inUse.has(canvas)) {
-      throw new Error('Canvas was not acquired from this pool');
+      throw new Error(PoolErrors.RELEASE_UNACQUIRED);
     }
 
     this.inUse.delete(canvas);
 
-    while (this.waitQueue.length > 0) {
+    while (this.waitQueue.length) {
       const task = this.waitQueue.shift()!;
       if (task.signal?.aborted) {
-        task.reject(new DOMException('Operation aborted', 'AbortError'));
+        task.reject(PoolErrors.OPERATION_ABORTED);
         continue;
       }
 
@@ -87,9 +102,8 @@ export class OffscreenCanvasPool implements Pool {
   dispose(): void {
     this.pool = [];
     this.inUse.clear();
-    this.waitQueue.forEach((task) =>
-      task.reject(new Error('Canvas pool disposed before task could run'))
-    );
+
+    this.waitQueue.forEach((task) => task.reject(new Error(PoolErrors.POOL_DISPOSED)));
     this.waitQueue = [];
   }
 }

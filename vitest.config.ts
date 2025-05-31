@@ -19,13 +19,9 @@ export default defineConfig({
         test: {
           globals: true,
           name: 'browser',
-          include: [
-            'test/**/*.browser.test.ts',
-            'test/**/*.universal.test.ts',
-            '**/*.test.ts'
-          ],
+          include: ['test/**/*.browser.test.ts', '**/*.test.ts'],
           benchmark: {
-            include: ['**/*.bench.ts']
+            include: ['**/*.browser.bench.ts']
           },
           environment: 'happy-dom',
           browser: {
@@ -46,10 +42,11 @@ export default defineConfig({
         test: {
           globals: true,
           name: 'server',
-          include: ['test/**/*.server.test.ts', 'test/**/*.universal.test.ts'],
+          include: ['test/**/*.server.test.ts'],
           environment: 'node',
           benchmark: {
-            include: ['test/**/*.server.bench.ts']
+            include: ['test/**/*.server.bench.ts'],
+            exclude: ['**/*.browser.bench.ts']
           }
         }
       }

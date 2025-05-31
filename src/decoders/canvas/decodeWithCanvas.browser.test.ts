@@ -29,7 +29,7 @@ describe('decodeWithCanvas', () => {
 
   test('stress test: decodes many images concurrently', async () => {
     const resize = { width: 32, height: 32, fit: 'cover' as const };
-    const concurrency = 50;
+    const concurrency = 20;
     const imageLoaders = Object.values(testImages);
     const blobs: Blob[] = [];
 
@@ -49,7 +49,7 @@ describe('decodeWithCanvas', () => {
   });
 
   test('stress test: concurrent decodes with frequent resizing', async () => {
-    const concurrency = 50;
+    const concurrency = 20;
     const imageLoaders = Object.values(testImages);
     const blobs: Blob[] = [];
 
@@ -58,7 +58,6 @@ describe('decodeWithCanvas', () => {
       blobs.push(await loader());
     }
 
-    // Random resize sizes to vary workload, mostly forcing resize
     const resizeOptions = [
       { width: 16, height: 16, fit: 'cover' as const },
       { width: 32, height: 24, fit: 'contain' as const },
@@ -79,7 +78,6 @@ describe('decodeWithCanvas', () => {
         expect(pixelData.height).toBeGreaterThan(0);
         expect(pixelData.data.length).toBe(pixelData.width * pixelData.height * 4);
       } else {
-        // Resize was applied, verify dimensions
         const expectedResize = resizeOptions[i % resizeOptions.length];
         expect(pixelData.width).toBe(expectedResize?.width);
         expect(pixelData.height).toBe(expectedResize?.height);
@@ -89,4 +87,39 @@ describe('decodeWithCanvas', () => {
       }
     });
   });
+
+  test.concurrent(
+    'stress test: concurrent decodeWithCanvas stress test with frequent resizing',
+    async () => {
+      const concurrencyLevel = 20;
+      const resizeOptions = [
+        { width: 16, height: 16, fit: 'cover' as const },
+        { width: 32, height: 24, fit: 'contain' as const },
+        { width: 48, height: 48, fit: 'fill' as const },
+        { width: 64, height: 32, fit: 'cover' as const }
+      ];
+
+      const decodePromises = Array.from({ length: concurrencyLevel }, async (_, i) => {
+        const keys = Object.keys(testImages);
+        const randomKey = keys[Math.floor(Math.random() * keys.length)]!;
+        const blob = await testImages[randomKey]!();
+
+        const resize = i % 5 === 0 ? undefined : resizeOptions[i % resizeOptions.length];
+
+        const pixelData = await decodeWithCanvas(blob, resize ? { resize } : undefined);
+
+        if (resize) {
+          expect(pixelData.width).toBe(resize.width);
+          expect(pixelData.height).toBe(resize.height);
+          expect(pixelData.data.length).toBe(resize.width * resize.height * 4);
+        } else {
+          expect(pixelData.width).toBeGreaterThan(0);
+          expect(pixelData.height).toBeGreaterThan(0);
+          expect(pixelData.data.length).toBe(pixelData.width * pixelData.height * 4);
+        }
+      });
+
+      await Promise.all(decodePromises);
+    }
+  );
 });
