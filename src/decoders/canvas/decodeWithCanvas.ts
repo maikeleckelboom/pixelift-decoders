@@ -1,40 +1,39 @@
 import type { PixelData, ResizeOptions } from '@/types';
 import { calculateSharpResizeRect } from '@/core/fn/calculateSharpResizeRect.ts';
 import {
-  CANVAS_IMAGE_SMOOTHING_SETTINGS,
+  CANVAS_IMAGE_SMOOTHING,
   CANVAS_RENDERING_CONTEXT_2D_SETTINGS
 } from '@/decoders/canvas/defaults.ts';
-import { OffscreenCanvasPool } from '@/core/pool/OffscreenCanvasPool.ts';
+import { OffscreenCanvasPool, type Pool } from '@/core/pool/OffscreenCanvasPool.ts';
 
 const canvasPool = new OffscreenCanvasPool(2048, 2048, navigator.hardwareConcurrency);
 
 export interface DecodeWithCanvasOptions {
+  signal?: AbortSignal;
+  quality?: ImageSmoothingQuality;
   resize?: ResizeOptions;
-  imageSmoothingQuality?: ImageSmoothingQuality;
 }
 
-/**
- * Decode an ImageBitmapSource into pixel data, optionally resizing it.
- * Uses pooled OffscreenCanvas instances for concurrent, efficient usage.
- *
- * @param source - The image source to decode (e.g., Blob, HTMLImageElement).
- * @param options - Optional resize options: width, height, fit, smoothing.
- * @returns PixelData with RGBA pixel buffer and dimensions.
- */
+export function decodeWithCanvas(
+  source: ImageBitmapSource,
+  optionsOrPool?: DecodeWithCanvasOptions | Pool,
+  maybeOptions?: DecodeWithCanvasOptions
+): Promise<PixelData>;
+
 export async function decodeWithCanvas(
   source: ImageBitmapSource,
-  options?: DecodeWithCanvasOptions
+  optionsOrPool?: DecodeWithCanvasOptions | Pool,
+  maybeOptions?: DecodeWithCanvasOptions
 ): Promise<PixelData> {
-  const { imageSmoothingQuality } = options ?? {};
-
+  const pool = hasPool(optionsOrPool) ? optionsOrPool : canvasPool;
+  const options = hasPool(optionsOrPool) ? maybeOptions : optionsOrPool;
   const resize = validateResizeOptions(options);
 
   const imageBitmap = await createImageBitmap(source);
-
   const targetWidth = resize?.width ?? imageBitmap.width;
   const targetHeight = resize?.height ?? imageBitmap.height;
 
-  const canvas = await canvasPool.acquire();
+  const canvas = await pool.acquire(options?.signal);
 
   try {
     canvas.width = targetWidth;
@@ -49,9 +48,9 @@ export async function decodeWithCanvas(
       resize &&
       (targetWidth !== imageBitmap.width || targetHeight !== imageBitmap.height)
     ) {
-      ctx.imageSmoothingEnabled = CANVAS_IMAGE_SMOOTHING_SETTINGS.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = CANVAS_IMAGE_SMOOTHING.imageSmoothingEnabled;
       ctx.imageSmoothingQuality =
-        imageSmoothingQuality ?? CANVAS_IMAGE_SMOOTHING_SETTINGS.imageSmoothingQuality;
+        options?.quality ?? CANVAS_IMAGE_SMOOTHING.imageSmoothingQuality;
     }
 
     const { sx, sy, sw, sh, dx, dy, dw, dh } = calculateSharpResizeRect(
@@ -75,8 +74,12 @@ export async function decodeWithCanvas(
     };
   } finally {
     imageBitmap.close();
-    canvasPool.release(canvas);
+    pool.release(canvas);
   }
+}
+
+function hasPool(input: unknown): input is Pool {
+  return !!input && typeof input === 'object' && 'acquire' in input && 'release' in input;
 }
 
 function validateResizeOptions(

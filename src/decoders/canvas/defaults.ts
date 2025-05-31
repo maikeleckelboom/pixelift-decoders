@@ -7,7 +7,7 @@ export const IMAGE_DATA_SETTINGS: ImageDataSettings = {
   colorSpace: 'srgb'
 } as const;
 
-export const CANVAS_IMAGE_SMOOTHING_SETTINGS: CanvasImageSmoothing = {
+export const CANVAS_IMAGE_SMOOTHING: CanvasImageSmoothing = {
   imageSmoothingEnabled: true,
   imageSmoothingQuality: 'high'
 } as const;
