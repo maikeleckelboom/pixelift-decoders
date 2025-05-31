@@ -4,24 +4,24 @@ export interface Pool {
   dispose(): void;
 }
 
-export type CanvasPoolTask = {
-  resolve: (canvas: OffscreenCanvas) => void;
-  reject: (err: Error) => void;
-  signal?: AbortSignal | undefined;
-};
-
 export const PoolErrors = {
-  INVALID_MAX_SIZE: 'maxSize must be a positive number.',
+  INVALID_MAX_SIZE: 'The `maxSize` must be a positive number.',
   INVALID_DIMENSIONS: 'Canvas width and height must be positive numbers.',
   RELEASE_UNACQUIRED: 'Cannot release a canvas that is not acquired.',
   POOL_DISPOSED: 'Canvas pool disposed before task could run.',
   OPERATION_ABORTED: new DOMException('Operation aborted', 'AbortError')
 };
 
+export type CanvasTask = {
+  resolve: (canvas: OffscreenCanvas) => void;
+  reject: (err: Error) => void;
+  signal?: AbortSignal | undefined;
+};
+
 export class OffscreenCanvasPool implements Pool {
   private pool: OffscreenCanvas[] = [];
   private inUse = new Set<OffscreenCanvas>();
-  private waitQueue: CanvasPoolTask[] = [];
+  private waitQueue: CanvasTask[] = [];
 
   constructor(
     private readonly width: number,
@@ -51,7 +51,7 @@ export class OffscreenCanvasPool implements Pool {
     }
 
     return new Promise((resolve, reject) => {
-      const task: CanvasPoolTask = { resolve, reject, signal };
+      const task: CanvasTask = { resolve, reject, signal };
 
       const onAbort = () => {
         const idx = this.waitQueue.indexOf(task);

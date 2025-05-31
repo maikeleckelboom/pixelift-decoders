@@ -1,5 +1,5 @@
 import type { PixelData, ResizeOptions } from '@/types';
-import { calculateSharpResizeRect } from '@/core/fn/calculateSharpResizeRect.ts';
+import { calculateResizeRect } from '@/core/fn/calculateResizeRect.ts';
 import {
   CANVAS_IMAGE_SMOOTHING,
   CANVAS_RENDERING_CONTEXT_2D_SETTINGS
@@ -55,7 +55,7 @@ export async function decodeWithCanvas(
         options?.quality ?? CANVAS_IMAGE_SMOOTHING.imageSmoothingQuality;
     }
 
-    const { sx, sy, sw, sh, dx, dy, dw, dh } = calculateSharpResizeRect(
+    const { sx, sy, sw, sh, dx, dy, dw, dh } = calculateResizeRect(
       imageBitmap.width,
       imageBitmap.height,
       {
