@@ -11,7 +11,7 @@ export class OffscreenCanvasPool {
   constructor(
     private readonly width: number,
     private readonly height: number,
-    private readonly maxSize: number = 8
+    private readonly maxSize: number = 4
   ) {}
 
   /**

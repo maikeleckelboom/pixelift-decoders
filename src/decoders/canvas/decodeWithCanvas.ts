@@ -6,7 +6,12 @@ import {
 } from '@/decoders/canvas/defaults.ts';
 import { OffscreenCanvasPool } from '@/core/pool/OffscreenCanvasPool.ts';
 
-const canvasPool = new OffscreenCanvasPool(2048, 2048, 7);
+const canvasPool = new OffscreenCanvasPool(2048, 2048, navigator.hardwareConcurrency);
+
+export interface DecodeWithCanvasOptions {
+  resize?: ResizeOptions;
+  imageSmoothingQuality?: ImageSmoothingQuality;
+}
 
 /**
  * Decode an ImageBitmapSource into pixel data, optionally resizing it.
@@ -18,18 +23,16 @@ const canvasPool = new OffscreenCanvasPool(2048, 2048, 7);
  */
 export async function decodeWithCanvas(
   source: ImageBitmapSource,
-  options?: { resize?: ResizeOptions; imageSmoothingQuality?: ImageSmoothingQuality }
+  options?: DecodeWithCanvasOptions
 ): Promise<PixelData> {
-  const { resize, imageSmoothingQuality } = options ?? {};
+  const { imageSmoothingQuality } = options ?? {};
+
+  const resize = validateResizeOptions(options);
+
   const imageBitmap = await createImageBitmap(source);
 
   const targetWidth = resize?.width ?? imageBitmap.width;
   const targetHeight = resize?.height ?? imageBitmap.height;
-
-  if (targetWidth <= 0 || targetHeight <= 0) {
-    imageBitmap.close();
-    throw new Error('Invalid target dimensions for resizing');
-  }
 
   const canvas = await canvasPool.acquire();
 
@@ -74,4 +77,22 @@ export async function decodeWithCanvas(
     imageBitmap.close();
     canvasPool.release(canvas);
   }
+}
+
+function validateResizeOptions(
+  options?: DecodeWithCanvasOptions
+): ResizeOptions | undefined {
+  if (!options?.resize) return undefined;
+
+  const { width, height, fit } = options.resize;
+
+  if (width <= 0 || height <= 0) {
+    throw new Error('Resize dimensions must be positive integers');
+  }
+
+  if (fit && !['cover', 'contain', 'fill', 'inside', 'outside'].includes(fit)) {
+    throw new Error(`Invalid fit mode: ${fit}`);
+  }
+
+  return { width, height, fit };
 }

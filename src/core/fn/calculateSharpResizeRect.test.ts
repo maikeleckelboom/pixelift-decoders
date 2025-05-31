@@ -4,7 +4,6 @@ import {
   type ResizeRect
 } from '@/core/fn/calculateSharpResizeRect.ts';
 
-// Helper function to create expected ResizeRect
 const createRect = (
   sx: number,
   sy: number,
@@ -23,18 +22,7 @@ describe('calculateSharpResizeRect', () => {
       // Should crop from sides, keeping center
       const result = calculateSharpResizeRect(1000, 500, { width: 400, height: 400 });
 
-      expect(result).toEqual(
-        createRect(
-          250,
-          0,
-          500,
-          500, // Source: crop 250px from each side
-          0,
-          0,
-          400,
-          400 // Destination: fill entire target
-        )
-      );
+      expect(result).toEqual(createRect(250, 0, 500, 500, 0, 0, 400, 400));
     });
 
     it('should crop vertically when source is taller than target aspect ratio', () => {
@@ -42,36 +30,14 @@ describe('calculateSharpResizeRect', () => {
       // Should crop from top/bottom, keeping center
       const result = calculateSharpResizeRect(500, 1000, { width: 400, height: 400 });
 
-      expect(result).toEqual(
-        createRect(
-          0,
-          250,
-          500,
-          500, // Source: crop 250px from top/bottom
-          0,
-          0,
-          400,
-          400 // Destination: fill entire target
-        )
-      );
+      expect(result).toEqual(createRect(0, 250, 500, 500, 0, 0, 400, 400));
     });
 
     it('should handle exact aspect ratio match', () => {
       // Source: 800x600 (4:3), Target: 400x300 (4:3)
       const result = calculateSharpResizeRect(800, 600, { width: 400, height: 300 });
 
-      expect(result).toEqual(
-        createRect(
-          0,
-          0,
-          800,
-          600, // Source: use entire image
-          0,
-          0,
-          400,
-          300 // Destination: fill entire target
-        )
-      );
+      expect(result).toEqual(createRect(0, 0, 800, 600, 0, 0, 400, 300));
     });
   });
 
@@ -85,18 +51,7 @@ describe('calculateSharpResizeRect', () => {
         fit: 'contain'
       });
 
-      expect(result).toEqual(
-        createRect(
-          0,
-          0,
-          1000,
-          500, // Source: use entire image
-          0,
-          100,
-          400,
-          200 // Destination: 400x200 centered in 400x400
-        )
-      );
+      expect(result).toEqual(createRect(0, 0, 1000, 500, 0, 100, 400, 200));
     });
 
     it('should pillarbox when source is taller than target aspect ratio', () => {
@@ -108,18 +63,7 @@ describe('calculateSharpResizeRect', () => {
         fit: 'contain'
       });
 
-      expect(result).toEqual(
-        createRect(
-          0,
-          0,
-          500,
-          1000, // Source: use entire image
-          100,
-          0,
-          200,
-          400 // Destination: 200x400 centered in 400x400
-        )
-      );
+      expect(result).toEqual(createRect(0, 0, 500, 1000, 100, 0, 200, 400));
     });
 
     it('should handle exact aspect ratio match', () => {
@@ -130,18 +74,7 @@ describe('calculateSharpResizeRect', () => {
         fit: 'contain'
       });
 
-      expect(result).toEqual(
-        createRect(
-          0,
-          0,
-          800,
-          600, // Source: use entire image
-          0,
-          0,
-          400,
-          300 // Destination: fill target exactly
-        )
-      );
+      expect(result).toEqual(createRect(0, 0, 800, 600, 0, 0, 400, 300));
     });
   });
 
@@ -155,18 +88,7 @@ describe('calculateSharpResizeRect', () => {
         fit: 'inside'
       });
 
-      expect(result).toEqual(
-        createRect(
-          0,
-          0,
-          300,
-          200, // Source: use entire image
-          50,
-          100,
-          300,
-          200 // Destination: center original size in target
-        )
-      );
+      expect(result).toEqual(createRect(0, 0, 300, 200, 50, 100, 300, 200));
     });
 
     it('should resize when source is larger than target', () => {
@@ -178,41 +100,19 @@ describe('calculateSharpResizeRect', () => {
         fit: 'inside'
       });
 
-      expect(result).toEqual(
-        createRect(
-          0,
-          0,
-          1000,
-          500, // Source: use entire image
-          0,
-          100,
-          400,
-          200 // Destination: fit to width, center vertically
-        )
-      );
+      expect(result).toEqual(createRect(0, 0, 1000, 500, 0, 100, 400, 200));
     });
 
     it('should not resize when one dimension is smaller', () => {
       // Source: 300x800, Target: 400x400
-      // Width is smaller, so don't resize - but function actually resizes to fit
+      // Width is smaller, so don't resize - but the function actually resizes to fit
       const result = calculateSharpResizeRect(300, 800, {
         width: 400,
         height: 400,
         fit: 'inside'
       });
 
-      expect(result).toEqual(
-        createRect(
-          0,
-          0,
-          300,
-          800, // Source: use entire image
-          125,
-          0,
-          150,
-          400 // Destination: scaled down to fit height
-        )
-      );
+      expect(result).toEqual(createRect(0, 0, 300, 800, 125, 0, 150, 400));
     });
   });
 
@@ -236,25 +136,14 @@ describe('calculateSharpResizeRect', () => {
   describe('fill mode', () => {
     it('should stretch to fill target dimensions', () => {
       // Source: 800x600, Target: 400x200
-      // Should stretch entire source to target
+      // Should stretch an entire source to target
       const result = calculateSharpResizeRect(800, 600, {
         width: 400,
         height: 200,
         fit: 'fill'
       });
 
-      expect(result).toEqual(
-        createRect(
-          0,
-          0,
-          800,
-          600, // Source: use entire image
-          0,
-          0,
-          400,
-          200 // Destination: fill entire target
-        )
-      );
+      expect(result).toEqual(createRect(0, 0, 800, 600, 0, 0, 400, 200));
     });
   });
 
@@ -273,18 +162,7 @@ describe('calculateSharpResizeRect', () => {
         fit: 'cover'
       });
 
-      expect(result).toEqual(
-        createRect(
-          995,
-          0,
-          10,
-          10, // Crop to center portion (much smaller than expected)
-          0,
-          0,
-          400,
-          400
-        )
-      );
+      expect(result).toEqual(createRect(995, 0, 10, 10, 0, 0, 400, 400));
     });
 
     it('should handle very tall source image', () => {
@@ -295,18 +173,7 @@ describe('calculateSharpResizeRect', () => {
         fit: 'cover'
       });
 
-      expect(result).toEqual(
-        createRect(
-          0,
-          995,
-          10,
-          10, // Crop to center portion (much smaller than expected)
-          0,
-          0,
-          400,
-          400
-        )
-      );
+      expect(result).toEqual(createRect(0, 995, 10, 10, 0, 0, 400, 400));
     });
 
     it('should handle rounding for odd dimensions', () => {
@@ -327,18 +194,7 @@ describe('calculateSharpResizeRect', () => {
         fit: 'contain'
       });
 
-      expect(result).toEqual(
-        createRect(
-          0,
-          0,
-          1000,
-          1000,
-          50,
-          0,
-          100,
-          100 // Fit to height, center horizontally
-        )
-      );
+      expect(result).toEqual(createRect(0, 0, 1000, 1000, 50, 0, 100, 100));
     });
 
     it('should default to cover mode when fit is not specified', () => {
@@ -380,18 +236,7 @@ describe('calculateSharpResizeRect', () => {
       });
 
       // Should fit to height: 1080 * (4000/3000) = 1440
-      expect(result).toEqual(
-        createRect(
-          0,
-          0,
-          4000,
-          3000,
-          240,
-          0,
-          1440,
-          1080 // Centered horizontally: (1920-1440)/2 = 240
-        )
-      );
+      expect(result).toEqual(createRect(0, 0, 4000, 3000, 240, 0, 1440, 1080));
     });
   });
 });
